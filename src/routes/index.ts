@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { healthRouter } from "./health.routes";
 import { patientRouter } from "./patient.routes";
+import { authRouter } from "./auth.routes";
 
 const router = Router();
 
@@ -11,10 +12,10 @@ const router = Router();
  * Padrão: router.use("/recurso", recursoRouter);
  */
 router.use("/health", healthRouter);
+router.use("/auth", authRouter);
 router.use("/patients", patientRouter);
 
 // Adicione novas rotas aqui:
 // router.use("/agendamentos", agendamentosRouter);
-// router.use("/auth", authRouter);
 
 export { router };

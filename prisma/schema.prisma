@@ -4,262 +4,262 @@
 // ──────────────────────────────────────────────
 
 generator client {
-  provider = "prisma-client-js"
+    provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+    provider = "mysql"
+    url      = env("DATABASE_URL")
 }
 
 // ── Patient ──────────────────────────────────
 
 model Patient {
-  id             String          @id @db.VarChar(36)
-  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamp(0)
-  fullName       String          @map("full_name") @db.VarChar(200)
-  dateOfBirth    DateTime?       @map("date_of_birth") @db.Date
-  maritalStatus  MaritalStatus   @default(other) @map("marital_status")
-  occupation     String?         @db.VarChar(100)
-  cpf            String          @unique(map: "uc_patient_cpf") @db.Char(11)
-  phoneNumber    String?         @map("phone_number") @db.VarChar(20)
-  email          String?         @unique(map: "uc_patient_email") @db.VarChar(254)
-  zipCode        String?         @map("zip_code") @db.VarChar(20)
-  street         String?         @db.VarChar(255)
-  addressNumber  String?         @map("address_number") @db.VarChar(20)
-  neighborhood   String?         @db.VarChar(100)
-  city           String?         @db.VarChar(100)
-  state          String?         @db.Char(2)
+    id            String        @id @db.VarChar(36)
+    createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
+    fullName      String        @map("full_name") @db.VarChar(200)
+    dateOfBirth   DateTime?     @map("date_of_birth") @db.Date
+    maritalStatus MaritalStatus @default(other) @map("marital_status")
+    occupation    String?       @db.VarChar(100)
+    cpf           String        @unique(map: "uc_patient_cpf") @db.Char(11)
+    phoneNumber   String?       @map("phone_number") @db.VarChar(20)
+    email         String?       @unique(map: "uc_patient_email") @db.VarChar(254)
+    zipCode       String?       @map("zip_code") @db.VarChar(20)
+    street        String?       @db.VarChar(255)
+    addressNumber String?       @map("address_number") @db.VarChar(20)
+    neighborhood  String?       @db.VarChar(100)
+    city          String?       @db.VarChar(100)
+    state         String?       @db.Char(2)
 
-  appointments Appointment[]
-  anamneses    Anamnesis[]
+    appointments Appointment[]
+    anamneses    Anamnesis[]
 
-  @@index([fullName], map: "idx_full_name")
-  @@index([city, state], map: "idx_city_state")
-  @@index([phoneNumber], map: "idx_phone")
-  @@map("patient")
+    @@index([fullName], map: "idx_full_name")
+    @@index([city, state], map: "idx_city_state")
+    @@index([phoneNumber], map: "idx_phone")
+    @@map("patient")
 }
 
 enum MaritalStatus {
-  single
-  married
-  divorced
-  widowed
-  other
+    single
+    married
+    divorced
+    widowed
+    other
 
-  @@map("patient_marital_status")
+    @@map("patient_marital_status")
 }
 
 // ── User ─────────────────────────────────────
 
 model User {
-  id               String    @id @db.VarChar(36)
-  username         String    @unique(map: "uc_user_username") @db.VarChar(191)
-  passwordHash     String    @map("password_hash") @db.VarChar(255)
-  professionalName String?   @map("professional_name") @db.VarChar(200)
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
-  deletedAt        DateTime? @map("deleted_at") @db.Timestamp(0)
+    id               String    @id @db.VarChar(36)
+    username         String    @unique(map: "uc_user_username") @db.VarChar(191)
+    passwordHash     String    @map("password_hash") @db.VarChar(255)
+    professionalName String?   @map("professional_name") @db.VarChar(200)
+    createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
+    deletedAt        DateTime? @map("deleted_at") @db.Timestamp(0)
 
-  appointments Appointment[]
+    appointments Appointment[]
 
-  @@index([username], map: "idx_user_username")
-  @@map("user")
+    @@index([username], map: "idx_user_username")
+    @@map("user")
 }
 
 // ── Appointment ──────────────────────────────
 
 model Appointment {
-  id             String            @id @db.VarChar(36)
-  patientId      String            @map("patient_id") @db.VarChar(36)
-  userId         String            @map("user_id") @db.VarChar(36)
-  scheduledStart DateTime          @map("scheduled_start") @db.DateTime(0)
-  scheduledEnd   DateTime          @map("scheduled_end") @db.DateTime(0)
-  scheduledDate  DateTime          @map("scheduled_date") @db.Date
-  status         AppointmentStatus @default(scheduled)
-  notes          String?           @db.Text
-  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamp(0)
-  deletedAt      DateTime?         @map("deleted_at") @db.Timestamp(0)
+    id             String            @id @db.VarChar(36)
+    patientId      String            @map("patient_id") @db.VarChar(36)
+    userId         String            @map("user_id") @db.VarChar(36)
+    scheduledStart DateTime          @map("scheduled_start") @db.DateTime(0)
+    scheduledEnd   DateTime          @map("scheduled_end") @db.DateTime(0)
+    scheduledDate  DateTime          @map("scheduled_date") @db.Date
+    status         AppointmentStatus @default(scheduled)
+    notes          String?           @db.Text
+    createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamp(0)
+    deletedAt      DateTime?         @map("deleted_at") @db.Timestamp(0)
 
-  patient            Patient             @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  user               User                @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  clinicalEvolutions ClinicalEvolution[]
-  billings           Billing[]
+    patient            Patient             @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    user               User                @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    clinicalEvolutions ClinicalEvolution[]
+    billings           Billing[]
 
-  @@index([patientId], map: "idx_appointments_patient")
-  @@index([userId], map: "idx_appointments_user")
-  @@index([scheduledDate], map: "idx_appointments_date")
-  @@index([status], map: "idx_appointments_status")
-  @@map("appointments")
+    @@index([patientId], map: "idx_appointments_patient")
+    @@index([userId], map: "idx_appointments_user")
+    @@index([scheduledDate], map: "idx_appointments_date")
+    @@index([status], map: "idx_appointments_status")
+    @@map("appointments")
 }
 
 enum AppointmentStatus {
-  scheduled
-  confirmed
-  in_progress
-  cancelled
-  completed
+    scheduled
+    confirmed
+    in_progress
+    cancelled
+    completed
 
-  @@map("appointments_status")
+    @@map("appointments_status")
 }
 
 // ── Clinical Evolution ───────────────────────
 
 model ClinicalEvolution {
-  id                       String    @id @db.VarChar(36)
-  appointmentId            String    @map("appointment_id") @db.VarChar(36)
-  clinicalNotes            String?   @map("clinical_notes") @db.Text
-  prescribedMedications    String?   @map("prescribed_medications") @db.Text
-  homeCareRecommendations  String?   @map("home_care_recommendations") @db.Text
-  recommendedReturnDays    Int?      @map("recommended_return_days") @db.UnsignedInt
-  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
-  deletedAt                DateTime? @map("deleted_at") @db.Timestamp(0)
+    id                      String    @id @db.VarChar(36)
+    appointmentId           String    @map("appointment_id") @db.VarChar(36)
+    clinicalNotes           String?   @map("clinical_notes") @db.Text
+    prescribedMedications   String?   @map("prescribed_medications") @db.Text
+    homeCareRecommendations String?   @map("home_care_recommendations") @db.Text
+    recommendedReturnDays   Int?      @map("recommended_return_days") @db.UnsignedInt
+    createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt               DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
+    deletedAt               DateTime? @map("deleted_at") @db.Timestamp(0)
 
-  appointment          Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
-  evolutionPathologies EvolutionPathology[]
+    appointment          Appointment          @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    evolutionPathologies EvolutionPathology[]
 
-  @@index([appointmentId], map: "idx_clinical_evolutions_appointment")
-  @@index([deletedAt], map: "idx_clinical_evolutions_deleted_at")
-  @@map("clinical_evolutions")
+    @@index([appointmentId], map: "idx_clinical_evolutions_appointment")
+    @@index([deletedAt], map: "idx_clinical_evolutions_deleted_at")
+    @@map("clinical_evolutions")
 }
 
 // ── Pathology ────────────────────────────────
 
 model Pathology {
-  id          String   @id @db.VarChar(36)
-  name        String   @unique(map: "uc_pathologies_name") @db.VarChar(100)
-  description String?  @db.Text
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+    id          String   @id @db.VarChar(36)
+    name        String   @unique(map: "uc_pathologies_name") @db.VarChar(100)
+    description String?  @db.Text
+    createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
 
-  evolutionPathologies EvolutionPathology[]
+    evolutionPathologies EvolutionPathology[]
 
-  @@index([name], map: "idx_pathologies_name")
-  @@map("pathologies")
+    @@index([name], map: "idx_pathologies_name")
+    @@map("pathologies")
 }
 
 // ── Evolution Pathology (pivot) ──────────────
 
 model EvolutionPathology {
-  evolutionId String   @map("evolution_id") @db.VarChar(36)
-  pathologyId String   @map("pathology_id") @db.VarChar(36)
-  bodyPart    BodyPart @map("body_part")
-  notes       String?  @db.VarChar(255)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+    evolutionId String   @map("evolution_id") @db.VarChar(36)
+    pathologyId String   @map("pathology_id") @db.VarChar(36)
+    bodyPart    BodyPart @map("body_part")
+    notes       String?  @db.VarChar(255)
+    createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
 
-  evolution ClinicalEvolution @relation(fields: [evolutionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  pathology Pathology          @relation(fields: [pathologyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    evolution ClinicalEvolution @relation(fields: [evolutionId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    pathology Pathology         @relation(fields: [pathologyId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@id([evolutionId, pathologyId, bodyPart])
-  @@index([pathologyId], map: "idx_evolution_pathologies_pathology")
-  @@map("evolution_pathologies")
+    @@id([evolutionId, pathologyId, bodyPart])
+    @@index([pathologyId], map: "idx_evolution_pathologies_pathology")
+    @@map("evolution_pathologies")
 }
 
 enum BodyPart {
-  right_foot
-  left_foot
-  right_hand
-  left_hand
+    right_foot
+    left_foot
+    right_hand
+    left_hand
 
-  @@map("evolution_pathologies_body_part")
+    @@map("evolution_pathologies_body_part")
 }
 
 // ── Billing ──────────────────────────────────
 
 model Billing {
-  id            String        @id @db.VarChar(36)
-  appointmentId String        @map("appointment_id") @db.VarChar(36)
-  amount        Decimal       @default(0.00) @db.Decimal(10, 2)
-  paymentMethod PaymentMethod @map("payment_method")
-  status        BillingStatus @default(pending)
-  paidAt        DateTime?     @map("paid_at") @db.Timestamp(0)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
-  deletedAt     DateTime?     @map("deleted_at") @db.Timestamp(0)
+    id            String        @id @db.VarChar(36)
+    appointmentId String        @map("appointment_id") @db.VarChar(36)
+    amount        Decimal       @default(0.00) @db.Decimal(10, 2)
+    paymentMethod PaymentMethod @map("payment_method")
+    status        BillingStatus @default(pending)
+    paidAt        DateTime?     @map("paid_at") @db.Timestamp(0)
+    createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
+    deletedAt     DateTime?     @map("deleted_at") @db.Timestamp(0)
 
-  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@index([appointmentId], map: "idx_billings_appointment")
-  @@index([status], map: "idx_billings_status")
-  @@index([paymentMethod], map: "idx_billings_payment_method")
-  @@index([deletedAt], map: "idx_billings_deleted_at")
-  @@map("billings")
+    @@index([appointmentId], map: "idx_billings_appointment")
+    @@index([status], map: "idx_billings_status")
+    @@index([paymentMethod], map: "idx_billings_payment_method")
+    @@index([deletedAt], map: "idx_billings_deleted_at")
+    @@map("billings")
 }
 
 enum PaymentMethod {
-  pix
-  credit_card
-  debit_card
-  cash
-  transfer
-  other
+    pix
+    credit_card
+    debit_card
+    cash
+    transfer
+    other
 
-  @@map("billings_payment_method")
+    @@map("billings_payment_method")
 }
 
 enum BillingStatus {
-  pending
-  paid
-  cancelled
-  refunded
+    pending
+    paid
+    cancelled
+    refunded
 
-  @@map("billings_status")
+    @@map("billings_status")
 }
 
 // ── Anamnesis ────────────────────────────────
 
 model Anamnesis {
-  id                        String          @id @db.VarChar(36)
-  patientId                 String          @map("patient_id") @db.VarChar(36)
-  createdAt                 DateTime        @default(now()) @map("created_at") @db.Timestamp(0)
-  updatedAt                 DateTime        @updatedAt @map("updated_at") @db.Timestamp(0)
-  deletedAt                 DateTime?       @map("deleted_at") @db.Timestamp(0)
-  frequentlyUsedFootwear    String?         @map("frequently_used_footwear") @db.VarChar(100)
-  frequentlyUsedSocks       String?         @map("frequently_used_socks") @db.VarChar(100)
-  practicedSports           String?         @map("practiced_sports") @db.VarChar(255)
-  hasLowerLimbSurgery       Boolean         @default(false) @map("has_lower_limb_surgery") @db.TinyInt
-  lowerLimbSurgeryDetails   String?         @map("lower_limb_surgery_details") @db.Text
-  medicationsInUse          String?         @map("medications_in_use") @db.Text
-  isPregnant                Boolean         @default(false) @map("is_pregnant") @db.TinyInt
-  hasPacemakerOrPins        Boolean         @default(false) @map("has_pacemaker_or_pins") @db.TinyInt
-  hasHypertension           Boolean         @default(false) @map("has_hypertension") @db.TinyInt
-  hasSeizures               Boolean         @default(false) @map("has_seizures") @db.TinyInt
-  hasCancerHistory          Boolean         @default(false) @map("has_cancer_history") @db.TinyInt
-  hasDiabetes               Boolean         @default(false) @map("has_diabetes") @db.TinyInt
-  hasCirculatoryProblems    Boolean         @default(false) @map("has_circulatory_problems") @db.TinyInt
-  hasHealingProblems        Boolean         @default(false) @map("has_healing_problems") @db.TinyInt
-  perfusion                 Perfusion       @default(normal)
-  hasMonofilamentSensitivity Boolean        @default(true) @map("has_monofilament_sensitivity") @db.TinyInt
-  dermatologicalPathologies String?         @map("dermatological_pathologies") @db.Text
-  nailPathologies           String?         @map("nail_pathologies") @db.Text
-  otherObservations         String?         @map("other_observations") @db.Text
-  painSensitivity           PainSensitivity? @default(none) @map("pain_sensitivity")
+    id                         String           @id @db.VarChar(36)
+    patientId                  String           @map("patient_id") @db.VarChar(36)
+    createdAt                  DateTime         @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt                  DateTime         @updatedAt @map("updated_at") @db.Timestamp(0)
+    deletedAt                  DateTime?        @map("deleted_at") @db.Timestamp(0)
+    frequentlyUsedFootwear     String?          @map("frequently_used_footwear") @db.VarChar(100)
+    frequentlyUsedSocks        String?          @map("frequently_used_socks") @db.VarChar(100)
+    practicedSports            String?          @map("practiced_sports") @db.VarChar(255)
+    hasLowerLimbSurgery        Boolean          @default(false) @map("has_lower_limb_surgery") @db.TinyInt
+    lowerLimbSurgeryDetails    String?          @map("lower_limb_surgery_details") @db.Text
+    medicationsInUse           String?          @map("medications_in_use") @db.Text
+    isPregnant                 Boolean          @default(false) @map("is_pregnant") @db.TinyInt
+    hasPacemakerOrPins         Boolean          @default(false) @map("has_pacemaker_or_pins") @db.TinyInt
+    hasHypertension            Boolean          @default(false) @map("has_hypertension") @db.TinyInt
+    hasSeizures                Boolean          @default(false) @map("has_seizures") @db.TinyInt
+    hasCancerHistory           Boolean          @default(false) @map("has_cancer_history") @db.TinyInt
+    hasDiabetes                Boolean          @default(false) @map("has_diabetes") @db.TinyInt
+    hasCirculatoryProblems     Boolean          @default(false) @map("has_circulatory_problems") @db.TinyInt
+    hasHealingProblems         Boolean          @default(false) @map("has_healing_problems") @db.TinyInt
+    perfusion                  Perfusion        @default(normal)
+    hasMonofilamentSensitivity Boolean          @default(true) @map("has_monofilament_sensitivity") @db.TinyInt
+    dermatologicalPathologies  String?          @map("dermatological_pathologies") @db.Text
+    nailPathologies            String?          @map("nail_pathologies") @db.Text
+    otherObservations          String?          @map("other_observations") @db.Text
+    painSensitivity            PainSensitivity? @default(none) @map("pain_sensitivity")
 
-  patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    patient Patient @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@index([patientId], map: "idx_anamnesis_patient")
-  @@index([deletedAt], map: "idx_anamnesis_deleted_at")
-  @@map("anamnesis")
+    @@index([patientId], map: "idx_anamnesis_patient")
+    @@index([deletedAt], map: "idx_anamnesis_deleted_at")
+    @@map("anamnesis")
 }
 
 enum Perfusion {
-  normal
-  pale
-  cyanotic
-  edematous
+    normal
+    pale
+    cyanotic
+    edematous
 
-  @@map("anamnesis_perfusion")
+    @@map("anamnesis_perfusion")
 }
 
 enum PainSensitivity {
-  high
-  moderate
-  low
-  none
+    high
+    moderate
+    low
+    none
 
-  @@map("anamnesis_pain_sensitivity")
+    @@map("anamnesis_pain_sensitivity")
 }

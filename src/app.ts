@@ -3,10 +3,11 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import compression from "compression";
+import cookieParser from "cookie-parser";
 
-import { env, corsOptions } from "./configs";
+import { env, corsOptions, helmetOptions } from "./configs";
 import { router } from "./routes";
-import { errorHandler, notFound } from "./middlewares";
+import { errorHandler, notFound, globalLimiter } from "./middlewares";
 
 /**
  * Cria e configura a instância do Express.
@@ -14,15 +15,27 @@ import { errorHandler, notFound } from "./middlewares";
 const createApp = (): express.Express => {
   const app = express();
 
-  // ── Segurança ──────────────────────────────────────
-  app.use(helmet());
+  // ── Trust proxy (necessário atrás de reverse proxy) ─
+  app.set("trust proxy", 1);
+
+  // ── Desabilitar x-powered-by ───────────────────────
+  app.disable("x-powered-by");
+
+  // ── Segurança — Helmet (headers) ───────────────────
+  app.use(helmet(helmetOptions));
 
   // ── CORS ───────────────────────────────────────────
   app.use(cors(corsOptions));
 
+  // ── Rate Limit Global ──────────────────────────────
+  app.use(globalLimiter);
+
+  // ── Cookie Parser (signed cookies) ─────────────────
+  app.use(cookieParser(env.COOKIE_SECRET));
+
   // ── Parsing ────────────────────────────────────────
-  app.use(express.json({ limit: "10mb" }));
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 
   // ── Compressão ─────────────────────────────────────
   app.use(compression());

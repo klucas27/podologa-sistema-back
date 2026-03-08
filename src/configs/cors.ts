@@ -4,20 +4,20 @@ import { env } from "./env";
 /**
  * Configuração de CORS.
  *
- * Em desenvolvimento: aceita todas as origens definidas em CORS_ORIGIN.
- * Em produção: aceita apenas as origens definidas em CORS_ORIGIN (sem wildcard).
+ * Em desenvolvimento: aceita origens locais conhecidas.
+ * Em produção: aceita apenas as origens definidas em CORS_ORIGIN.
  */
+
+const DEV_ORIGINS = ["http://localhost:3000", "http://localhost:5173"];
 
 const parseOrigins = (): string[] => {
   return env.CORS_ORIGIN.split(",").map((origin) => origin.trim());
 };
 
 export const corsOptions: CorsOptions = {
-  origin: env.isDev
-    ? true // Em dev aceita qualquer origem para facilitar o desenvolvimento
-    : parseOrigins(), // Em prod aceita apenas origens explícitas
+  origin: env.isDev ? DEV_ORIGINS : parseOrigins(),
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
   credentials: true,
-  maxAge: 86400, // Cache preflight por 24h
+  maxAge: 86400,
 };
