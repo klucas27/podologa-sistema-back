@@ -2,6 +2,12 @@ import { Router } from "express";
 import { healthRouter } from "./health.routes";
 import { patientRouter } from "./patient.routes";
 import { authRouter } from "./auth.routes";
+import { appointmentRouter } from "./appointment.routes";
+import { clinicalEvolutionRouter } from "./clinicalEvolution.routes";
+import { pathologyRouter } from "./pathology.routes";
+import { evolutionPathologyRouter } from "./evolutionPathology.routes";
+import { billingRouter } from "./billing.routes";
+import { anamnesisRouter } from "./anamnesis.routes";
 import { authMiddleware } from "../middlewares/auth.middleware";
 
 const router = Router();
@@ -22,8 +28,11 @@ router.use("/auth", authRouter);
 router.use(authMiddleware);
 
 router.use("/patients", patientRouter);
-
-// Adicione novas rotas autenticadas aqui:
-// router.use("/appointments", appointmentRouter);
+router.use("/appointments", appointmentRouter);
+router.use("/clinical-evolutions", clinicalEvolutionRouter);
+router.use("/pathologies", pathologyRouter);
+router.use("/evolution-pathologies", evolutionPathologyRouter);
+router.use("/billings", billingRouter);
+router.use("/anamneses", anamnesisRouter);
 
 export { router };
