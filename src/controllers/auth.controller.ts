@@ -3,6 +3,8 @@ import {
   login,
   getAuthenticatedUser,
   register,
+  changePassword,
+  updateWorkingHours,
 } from "../services/auth.service";
 import { generateCsrfToken } from "../middlewares/csrf.middleware";
 import { env } from "../configs";
@@ -144,3 +146,95 @@ const meController = async (req: Request, res: Response): Promise<void> => {
 };
 
 export { loginController, logoutController, meController, registerUser };
+
+/**
+ * PATCH /api/auth/password
+ */
+const changePasswordController = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    res.status(401).json({ status: "error", message: "Não autenticado" });
+    return;
+  }
+
+  const { currentPassword, newPassword } = req.body as {
+    currentPassword?: string;
+    newPassword?: string;
+  };
+
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({
+      status: "error",
+      message: "Senha atual e nova senha são obrigatórias",
+    });
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    res.status(400).json({
+      status: "error",
+      message: "A nova senha deve ter pelo menos 6 caracteres",
+    });
+    return;
+  }
+
+  const success = await changePassword(userId, currentPassword, newPassword);
+
+  if (!success) {
+    res.status(400).json({
+      status: "error",
+      message: "Senha atual incorreta",
+    });
+    return;
+  }
+
+  res.status(200).json({ status: "ok", message: "Senha alterada com sucesso" });
+};
+
+/**
+ * PATCH /api/auth/working-hours
+ */
+const updateWorkingHoursController = async (req: Request, res: Response): Promise<void> => {
+  const userId = req.user?.userId;
+
+  if (!userId) {
+    res.status(401).json({ status: "error", message: "Não autenticado" });
+    return;
+  }
+
+  const { workdayStart, workdayEnd } = req.body as {
+    workdayStart?: string;
+    workdayEnd?: string;
+  };
+
+  if (!workdayStart || !workdayEnd) {
+    res.status(400).json({
+      status: "error",
+      message: "Horário de início e fim do expediente são obrigatórios",
+    });
+    return;
+  }
+
+  const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+  if (!timeRegex.test(workdayStart) || !timeRegex.test(workdayEnd)) {
+    res.status(400).json({
+      status: "error",
+      message: "Formato de horário inválido. Use HH:mm",
+    });
+    return;
+  }
+
+  if (workdayStart >= workdayEnd) {
+    res.status(400).json({
+      status: "error",
+      message: "O horário de início deve ser anterior ao de término",
+    });
+    return;
+  }
+
+  const user = await updateWorkingHours(userId, workdayStart, workdayEnd);
+  res.status(200).json({ status: "ok", data: user });
+};
+
+export { changePasswordController, updateWorkingHoursController };

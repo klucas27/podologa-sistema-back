@@ -6,6 +6,8 @@ import {
   createAppointment,
   updateAppointment,
   deleteAppointment,
+  AppointmentConflictError,
+  AppointmentStatusError,
 } from "../services/appointment.service";
 import type { CreateAppointmentInput, UpdateAppointmentInput } from "../services/appointment.service";
 
@@ -43,8 +45,16 @@ const createAppointmentController = async (req: Request, res: Response): Promise
     return;
   }
 
-  const appointment = await createAppointment(body);
-  res.status(201).json({ status: "ok", data: appointment });
+  try {
+    const appointment = await createAppointment(body);
+    res.status(201).json({ status: "ok", data: appointment });
+  } catch (err) {
+    if (err instanceof AppointmentConflictError) {
+      res.status(409).json({ status: "error", message: err.message });
+      return;
+    }
+    throw err;
+  }
 };
 
 const updateAppointmentController = async (req: Request, res: Response): Promise<void> => {
@@ -56,14 +66,26 @@ const updateAppointmentController = async (req: Request, res: Response): Promise
     return;
   }
 
-  const appointment = await updateAppointment(id, body);
+  try {
+    const appointment = await updateAppointment(id, body);
 
-  if (!appointment) {
-    res.status(404).json({ status: "error", message: "Agendamento não encontrado" });
-    return;
+    if (!appointment) {
+      res.status(404).json({ status: "error", message: "Agendamento não encontrado" });
+      return;
+    }
+
+    res.status(200).json({ status: "ok", data: appointment });
+  } catch (err) {
+    if (err instanceof AppointmentConflictError) {
+      res.status(409).json({ status: "error", message: err.message });
+      return;
+    }
+    if (err instanceof AppointmentStatusError) {
+      res.status(400).json({ status: "error", message: err.message });
+      return;
+    }
+    throw err;
   }
-
-  res.status(200).json({ status: "ok", data: appointment });
 };
 
 const deleteAppointmentController = async (req: Request, res: Response): Promise<void> => {

@@ -65,6 +65,8 @@ const getAuthenticatedUser = async (userId: string) => {
       id: true,
       username: true,
       professionalName: true,
+      workdayStart: true,
+      workdayEnd: true,
       createdAt: true,
     },
   });
@@ -72,7 +74,53 @@ const getAuthenticatedUser = async (userId: string) => {
   return user;
 };
 
-export { login, getAuthenticatedUser };
+/**
+ * Changes the user's password after verifying the current password.
+ */
+const changePassword = async (
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<boolean> => {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+
+  if (!user || user.deletedAt) return false;
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) return false;
+
+  const newHash = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: newHash },
+  });
+
+  return true;
+};
+
+/**
+ * Updates the user's working hours configuration.
+ */
+const updateWorkingHours = async (
+  userId: string,
+  workdayStart: string,
+  workdayEnd: string,
+) => {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { workdayStart, workdayEnd },
+    select: {
+      id: true,
+      username: true,
+      professionalName: true,
+      workdayStart: true,
+      workdayEnd: true,
+      createdAt: true,
+    },
+  });
+};
+
+export { login, getAuthenticatedUser, changePassword, updateWorkingHours };
 
 /**
  * Registra um novo usuário (username + password + professionalName?)

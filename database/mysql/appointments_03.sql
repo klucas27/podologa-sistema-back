@@ -10,6 +10,8 @@ CREATE TABLE
         scheduled_start DATETIME NOT NULL,
         scheduled_end DATETIME NOT NULL,
         scheduled_date DATE NOT NULL,
+        actual_start_time DATETIME NULL DEFAULT NULL,
+        actual_end_time DATETIME NULL DEFAULT NULL,
         status ENUM (
             'scheduled',
             'confirmed',

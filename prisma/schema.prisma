@@ -18,13 +18,13 @@ model Patient {
     id            String        @id @db.VarChar(36)
     createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
     updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
-    fullName      String        @map("full_name") @db.VarChar(200)
+    fullName      String        @map("full_name") @db.VarChar(191)
     dateOfBirth   DateTime?     @map("date_of_birth") @db.Date
     maritalStatus MaritalStatus @default(other) @map("marital_status")
     occupation    String?       @db.VarChar(100)
     cpf           String        @unique(map: "uc_patient_cpf") @db.Char(11)
     phoneNumber   String?       @map("phone_number") @db.VarChar(20)
-    email         String?       @unique(map: "uc_patient_email") @db.VarChar(254)
+    email         String?       @unique(map: "uc_patient_email") @db.VarChar(191)
     zipCode       String?       @map("zip_code") @db.VarChar(20)
     street        String?       @db.VarChar(255)
     addressNumber String?       @map("address_number") @db.VarChar(20)
@@ -58,6 +58,8 @@ model User {
     username         String    @unique(map: "uc_user_username") @db.VarChar(191)
     passwordHash     String    @map("password_hash") @db.VarChar(255)
     professionalName String?   @map("professional_name") @db.VarChar(200)
+    workdayStart     String    @default("08:00") @map("workday_start") @db.VarChar(5)
+    workdayEnd       String    @default("18:00") @map("workday_end") @db.VarChar(5)
     createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
     updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
     deletedAt        DateTime? @map("deleted_at") @db.Timestamp(0)
@@ -71,17 +73,19 @@ model User {
 // ── Appointment ──────────────────────────────
 
 model Appointment {
-    id             String            @id @db.VarChar(36)
-    patientId      String            @map("patient_id") @db.VarChar(36)
-    userId         String            @map("user_id") @db.VarChar(36)
-    scheduledStart DateTime          @map("scheduled_start") @db.DateTime(0)
-    scheduledEnd   DateTime          @map("scheduled_end") @db.DateTime(0)
-    scheduledDate  DateTime          @map("scheduled_date") @db.Date
-    status         AppointmentStatus @default(scheduled)
-    notes          String?           @db.Text
-    createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamp(0)
-    updatedAt      DateTime          @updatedAt @map("updated_at") @db.Timestamp(0)
-    deletedAt      DateTime?         @map("deleted_at") @db.Timestamp(0)
+    id              String            @id @db.VarChar(36)
+    patientId       String            @map("patient_id") @db.VarChar(36)
+    userId          String            @map("user_id") @db.VarChar(36)
+    scheduledStart  DateTime          @map("scheduled_start") @db.DateTime(0)
+    scheduledEnd    DateTime          @map("scheduled_end") @db.DateTime(0)
+    scheduledDate   DateTime          @map("scheduled_date") @db.Date
+    actualStartTime DateTime?         @map("actual_start_time") @db.DateTime(0)
+    actualEndTime   DateTime?         @map("actual_end_time") @db.DateTime(0)
+    status          AppointmentStatus @default(scheduled)
+    notes           String?           @db.Text
+    createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamp(0)
+    deletedAt       DateTime?         @map("deleted_at") @db.Timestamp(0)
 
     patient            Patient             @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
     user               User                @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)

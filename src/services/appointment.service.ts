@@ -20,6 +20,50 @@ interface UpdateAppointmentInput {
   notes?: string | null;
 }
 
+class AppointmentConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AppointmentConflictError";
+  }
+}
+
+class AppointmentStatusError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AppointmentStatusError";
+  }
+}
+
+/**
+ * Checks for time conflicts with existing appointments.
+ * Two appointments conflict when their time ranges overlap.
+ */
+const checkTimeConflict = async (
+  start: Date,
+  end: Date,
+  excludeId?: string,
+): Promise<void> => {
+  const conflicting = await prisma.appointment.findFirst({
+    where: {
+      deletedAt: null,
+      status: { notIn: ["cancelled"] },
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+      scheduledStart: { lt: end },
+      scheduledEnd: { gt: start },
+    },
+    include: { patient: true },
+  });
+
+  if (conflicting) {
+    const conflictStart = conflicting.scheduledStart.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const conflictEnd = conflicting.scheduledEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const patientName = conflicting.patient?.fullName ?? "Paciente";
+    throw new AppointmentConflictError(
+      `Conflito de horário: já existe uma consulta de ${patientName} das ${conflictStart} às ${conflictEnd}`,
+    );
+  }
+};
+
 const getAppointmentById = async (
   id: string,
 ): Promise<Appointment | null> => {
@@ -50,13 +94,18 @@ const listAppointmentsByPatient = async (
 const createAppointment = async (
   data: CreateAppointmentInput,
 ): Promise<Appointment> => {
+  const start = new Date(data.scheduledStart);
+  const end = new Date(data.scheduledEnd);
+
+  await checkTimeConflict(start, end);
+
   return prisma.appointment.create({
     data: {
       id: crypto.randomUUID(),
       patientId: data.patientId,
       userId: data.userId,
-      scheduledStart: new Date(data.scheduledStart),
-      scheduledEnd: new Date(data.scheduledEnd),
+      scheduledStart: start,
+      scheduledEnd: end,
       scheduledDate: new Date(data.scheduledDate),
       status: data.status ?? "scheduled",
       notes: data.notes ?? null,
@@ -74,19 +123,57 @@ const updateAppointment = async (
 
   if (!existing) return null;
 
+  // Only consultations with status "scheduled" are fully editable
+  if (data.scheduledStart || data.scheduledEnd || data.scheduledDate || data.notes !== undefined) {
+    if (existing.status !== "scheduled" && !data.status) {
+      throw new AppointmentStatusError(
+        "Apenas consultas com status 'Agendada' podem ser editadas",
+      );
+    }
+  }
+
+  // Check time conflicts when changing schedule
+  if (data.scheduledStart || data.scheduledEnd) {
+    const newStart = data.scheduledStart ? new Date(data.scheduledStart) : existing.scheduledStart;
+    const newEnd = data.scheduledEnd ? new Date(data.scheduledEnd) : existing.scheduledEnd;
+    await checkTimeConflict(newStart, newEnd, id);
+  }
+
+  // Handle status transitions with actual time recording
+  const updateData: Record<string, unknown> = {};
+
+  if (data.scheduledStart) updateData.scheduledStart = new Date(data.scheduledStart);
+  if (data.scheduledEnd) updateData.scheduledEnd = new Date(data.scheduledEnd);
+  if (data.scheduledDate) updateData.scheduledDate = new Date(data.scheduledDate);
+  if (data.notes !== undefined) updateData.notes = data.notes;
+
+  if (data.status) {
+    // Validate status transitions
+    if (data.status === "in_progress") {
+      if (existing.status !== "scheduled" && existing.status !== "confirmed") {
+        throw new AppointmentStatusError(
+          "Apenas consultas 'Agendada' ou 'Confirmada' podem ser iniciadas",
+        );
+      }
+      updateData.status = "in_progress";
+      updateData.actualStartTime = new Date();
+    } else if (data.status === "completed") {
+      if (existing.status !== "in_progress") {
+        throw new AppointmentStatusError(
+          "Apenas consultas 'Em Atendimento' podem ser finalizadas",
+        );
+      }
+      updateData.status = "completed";
+      updateData.actualEndTime = new Date();
+    } else {
+      updateData.status = data.status;
+    }
+  }
+
   return prisma.appointment.update({
     where: { id },
-    data: {
-      ...(data.scheduledStart && {
-        scheduledStart: new Date(data.scheduledStart),
-      }),
-      ...(data.scheduledEnd && { scheduledEnd: new Date(data.scheduledEnd) }),
-      ...(data.scheduledDate && {
-        scheduledDate: new Date(data.scheduledDate),
-      }),
-      ...(data.status && { status: data.status }),
-      ...(data.notes !== undefined && { notes: data.notes }),
-    },
+    data: updateData,
+    include: { patient: true, user: true },
   });
 };
 
@@ -112,5 +199,7 @@ export {
   createAppointment,
   updateAppointment,
   deleteAppointment,
+  AppointmentConflictError,
+  AppointmentStatusError,
 };
 export type { CreateAppointmentInput, UpdateAppointmentInput };

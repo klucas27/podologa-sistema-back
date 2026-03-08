@@ -4,6 +4,8 @@ import {
   logoutController,
   meController,
   registerUser,
+  changePasswordController,
+  updateWorkingHoursController,
 } from "../controllers/auth.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { authLimiter } from "../middlewares/rateLimit.middleware";
@@ -32,5 +34,17 @@ authRouter.post("/logout", logoutController);
  * Retorna os dados do usuário autenticado.
  */
 authRouter.get("/me", authMiddleware, meController);
+
+/**
+ * PATCH /api/auth/password
+ * Altera a senha do usuário autenticado.
+ */
+authRouter.patch("/password", authMiddleware, changePasswordController);
+
+/**
+ * PATCH /api/auth/working-hours
+ * Atualiza o horário de expediente do usuário autenticado.
+ */
+authRouter.patch("/working-hours", authMiddleware, updateWorkingHoursController);
 
 export { authRouter };
