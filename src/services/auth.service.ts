@@ -2,6 +2,7 @@ import jwt, { type SignOptions } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib";
 import { env } from "../configs";
+import crypto from "crypto";
 
 interface LoginResult {
   token: string;
@@ -72,3 +73,45 @@ const getAuthenticatedUser = async (userId: string) => {
 };
 
 export { login, getAuthenticatedUser };
+
+/**
+ * Registra um novo usuário (username + password + professionalName?)
+ * Retorna o mesmo formato que o login: token + public user fields.
+ */
+const register = async (
+  username: string,
+  password: string,
+  professionalName?: string | null,
+): Promise<LoginResult | null> => {
+  // checa existência básica para evitar criar duplicados explicitos
+  const existing = await prisma.user.findUnique({ where: { username } });
+  if (existing) return null;
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  const user = await prisma.user.create({
+    data: {
+      id: crypto.randomUUID(),
+      username,
+      passwordHash,
+      professionalName: professionalName ?? null,
+    },
+  });
+
+  const signOptions: SignOptions = {
+    expiresIn: env.JWT_EXPIRES_IN as "1d",
+  };
+
+  const token = jwt.sign({ userId: user.id, username: user.username }, env.JWT_SECRET, signOptions);
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      username: user.username,
+      professionalName: user.professionalName,
+    },
+  };
+};
+
+export { register };

@@ -3,6 +3,7 @@ import {
   loginController,
   logoutController,
   meController,
+  registerUser,
 } from "../controllers/auth.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { authLimiter } from "../middlewares/rateLimit.middleware";
@@ -14,6 +15,11 @@ const authRouter = Router();
  * Autentica o usuário e retorna JWT em cookie HTTP-only.
  */
 authRouter.post("/login", authLimiter, loginController);
+
+/**
+ * POST /api/auth/register
+ */
+authRouter.post("/register", authLimiter, registerUser);
 
 /**
  * POST /api/auth/logout

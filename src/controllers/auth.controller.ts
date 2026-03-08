@@ -1,5 +1,9 @@
 import type { Request, Response } from "express";
-import { login, getAuthenticatedUser } from "../services/auth.service";
+import {
+  login,
+  getAuthenticatedUser,
+  register,
+} from "../services/auth.service";
 import { generateCsrfToken } from "../middlewares/csrf.middleware";
 import { env } from "../configs";
 
@@ -52,6 +56,47 @@ const loginController = async (req: Request, res: Response): Promise<void> => {
 };
 
 /**
+ * POST /api/auth/register
+ */
+const registerUser = async (req: Request, res: Response): Promise<void> => {
+  const { username, password, professionalName } = req.body as {
+    username?: string;
+    password?: string;
+    professionalName?: string | null;
+  };
+
+  if (!username || !password) {
+    res
+      .status(400)
+      .json({ status: "error", message: "Username e senha são obrigatórios" });
+    return;
+  }
+
+  try {
+    const result = await register(username, password, professionalName ?? null);
+
+    if (!result) {
+      res
+        .status(409)
+        .json({ status: "error", message: "Username já está em uso" });
+      return;
+    }
+
+    const csrfToken = generateCsrfToken(req, res);
+
+    res.cookie("token", result.token, COOKIE_OPTIONS);
+
+    res
+      .status(201)
+      .json({ status: "ok", data: { user: result.user, csrfToken } });
+  } catch (err) {
+    // Se ocorrer erro de constraint do Prisma, o middleware global de erro irá
+    // normalizar para a resposta apropriada. Aqui retornamos 500 genérico.
+    res.status(500).json({ status: "error", message: "Erro ao criar usuário" });
+  }
+};
+
+/**
  * POST /api/auth/logout
  */
 const logoutController = (_req: Request, res: Response): void => {
@@ -98,4 +143,4 @@ const meController = async (req: Request, res: Response): Promise<void> => {
   });
 };
 
-export { loginController, logoutController, meController };
+export { loginController, logoutController, meController, registerUser };
