@@ -12,6 +12,9 @@ export const env = {
   /** Origens permitidas pelo CORS (separadas por vírgula no .env) */
   CORS_ORIGIN: process.env["CORS_ORIGIN"] || "http://localhost:5173",
 
+  /** URL de conexão com o banco de dados */
+  DATABASE_URL: process.env["DATABASE_URL"] || "",
+
   /** Helpers */
   isDev: (process.env["NODE_ENV"] || "development") === "development",
   isProd: process.env["NODE_ENV"] === "production",
