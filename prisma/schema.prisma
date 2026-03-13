@@ -70,12 +70,34 @@ model User {
     @@map("user")
 }
 
+// ── Professional ─────────────────────────────
+
+model Professional {
+    id          String    @id @db.VarChar(36)
+    fullName    String    @map("full_name") @db.VarChar(200)
+    specialty   String?   @db.VarChar(100)
+    phoneNumber String?   @map("phone_number") @db.VarChar(20)
+    email       String?   @unique(map: "uc_professional_email") @db.VarChar(191)
+    isActive    Boolean   @default(true) @map("is_active") @db.TinyInt
+    createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+    updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
+    deletedAt   DateTime? @map("deleted_at") @db.Timestamp(0)
+
+    appointments Appointment[]
+
+    @@index([fullName], map: "idx_professional_full_name")
+    @@index([isActive], map: "idx_professional_is_active")
+    @@index([deletedAt], map: "idx_professional_deleted_at")
+    @@map("professional")
+}
+
 // ── Appointment ──────────────────────────────
 
 model Appointment {
     id              String            @id @db.VarChar(36)
     patientId       String            @map("patient_id") @db.VarChar(36)
     userId          String            @map("user_id") @db.VarChar(36)
+    professionalId  String?           @map("professional_id") @db.VarChar(36)
     scheduledStart  DateTime          @map("scheduled_start") @db.DateTime(0)
     scheduledEnd    DateTime          @map("scheduled_end") @db.DateTime(0)
     scheduledDate   DateTime          @map("scheduled_date") @db.Date
@@ -89,11 +111,13 @@ model Appointment {
 
     patient            Patient             @relation(fields: [patientId], references: [id], onDelete: Restrict, onUpdate: Cascade)
     user               User                @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    professional       Professional?       @relation(fields: [professionalId], references: [id], onDelete: Restrict, onUpdate: Cascade)
     clinicalEvolutions ClinicalEvolution[]
     billings           Billing[]
 
     @@index([patientId], map: "idx_appointments_patient")
     @@index([userId], map: "idx_appointments_user")
+    @@index([professionalId], map: "idx_appointments_professional")
     @@index([scheduledDate], map: "idx_appointments_date")
     @@index([status], map: "idx_appointments_status")
     @@map("appointments")

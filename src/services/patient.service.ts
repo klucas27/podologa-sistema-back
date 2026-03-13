@@ -37,6 +37,7 @@ const listPatients = async (search?: string): Promise<Patient[]> => {
   return prisma.patient.findMany({
     where,
     orderBy: { fullName: "asc" },
+    include: { _count: { select: { anamneses: true } } },
   });
 };
 

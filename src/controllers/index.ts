@@ -47,6 +47,14 @@ export {
   deleteBillingController,
 } from "./billing.controller";
 export {
+  findProfessionalById,
+  listAllProfessionals,
+  listActiveProfessionalsController,
+  createProfessionalController,
+  updateProfessionalController,
+  deleteProfessionalController,
+} from "./professional.controller";
+export {
   findAnamnesisById,
   listAnamnesesByPatientController,
   createAnamnesisController,

@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import {
   getBillingById,
   listBillingsByAppointment,
+  listAllBillings,
   createBilling,
   updateBilling,
   deleteBilling,
@@ -23,6 +24,11 @@ const findBillingById = async (req: Request, res: Response): Promise<void> => {
 const listBillingsByAppointmentController = async (req: Request, res: Response): Promise<void> => {
   const appointmentId = req.params["appointmentId"] as string;
   const billings = await listBillingsByAppointment(appointmentId);
+  res.status(200).json({ status: "ok", data: billings });
+};
+
+const listAllBillingsController = async (_req: Request, res: Response): Promise<void> => {
+  const billings = await listAllBillings();
   res.status(200).json({ status: "ok", data: billings });
 };
 
@@ -75,6 +81,7 @@ const deleteBillingController = async (req: Request, res: Response): Promise<voi
 export {
   findBillingById,
   listBillingsByAppointmentController,
+  listAllBillingsController,
   createBillingController,
   updateBillingController,
   deleteBillingController,

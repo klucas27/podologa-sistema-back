@@ -2,12 +2,19 @@ import { Router } from "express";
 import {
   findBillingById,
   listBillingsByAppointmentController,
+  listAllBillingsController,
   createBillingController,
   updateBillingController,
   deleteBillingController,
 } from "../controllers/billing.controller";
 
 const billingRouter = Router();
+
+/**
+ * GET /api/billings
+ * Lista todas as cobranças.
+ */
+billingRouter.get("/", listAllBillingsController);
 
 /**
  * GET /api/billings/appointment/:appointmentId

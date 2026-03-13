@@ -5,6 +5,7 @@ import type { Appointment, AppointmentStatus } from "@prisma/client";
 interface CreateAppointmentInput {
   patientId: string;
   userId: string;
+  professionalId?: string | null;
   scheduledStart: string;
   scheduledEnd: string;
   scheduledDate: string;
@@ -13,6 +14,7 @@ interface CreateAppointmentInput {
 }
 
 interface UpdateAppointmentInput {
+  professionalId?: string | null;
   scheduledStart?: string;
   scheduledEnd?: string;
   scheduledDate?: string;
@@ -69,14 +71,18 @@ const getAppointmentById = async (
 ): Promise<Appointment | null> => {
   return prisma.appointment.findFirst({
     where: { id, deletedAt: null },
-    include: { patient: true, user: true },
+    include: { patient: true, user: true, professional: true },
   });
 };
 
 const listAppointments = async (): Promise<Appointment[]> => {
   return prisma.appointment.findMany({
     where: { deletedAt: null },
-    include: { patient: true, user: true },
+    include: {
+      patient: { include: { _count: { select: { anamneses: true } } } },
+      user: true,
+      professional: true,
+    },
     orderBy: { scheduledDate: "desc" },
   });
 };
@@ -86,7 +92,7 @@ const listAppointmentsByPatient = async (
 ): Promise<Appointment[]> => {
   return prisma.appointment.findMany({
     where: { patientId, deletedAt: null },
-    include: { patient: true, user: true, clinicalEvolutions: { where: { deletedAt: null }, include: { evolutionPathologies: { include: { pathology: true } } } } },
+    include: { patient: true, user: true, professional: true, clinicalEvolutions: { where: { deletedAt: null }, include: { evolutionPathologies: { include: { pathology: true } } } } },
     orderBy: { scheduledDate: "desc" },
   });
 };
@@ -104,6 +110,7 @@ const createAppointment = async (
       id: crypto.randomUUID(),
       patientId: data.patientId,
       userId: data.userId,
+      professionalId: data.professionalId ?? null,
       scheduledStart: start,
       scheduledEnd: end,
       scheduledDate: new Date(data.scheduledDate),
@@ -146,6 +153,7 @@ const updateAppointment = async (
   if (data.scheduledEnd) updateData.scheduledEnd = new Date(data.scheduledEnd);
   if (data.scheduledDate) updateData.scheduledDate = new Date(data.scheduledDate);
   if (data.notes !== undefined) updateData.notes = data.notes;
+  if (data.professionalId !== undefined) updateData.professionalId = data.professionalId;
 
   if (data.status) {
     // Validate status transitions
@@ -173,7 +181,7 @@ const updateAppointment = async (
   return prisma.appointment.update({
     where: { id },
     data: updateData,
-    include: { patient: true, user: true },
+    include: { patient: true, user: true, professional: true },
   });
 };
 

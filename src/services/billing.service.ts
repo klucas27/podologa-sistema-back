@@ -34,6 +34,18 @@ const listBillingsByAppointment = async (
   });
 };
 
+const listAllBillings = async (): Promise<Billing[]> => {
+  return prisma.billing.findMany({
+    where: { deletedAt: null },
+    include: {
+      appointment: {
+        include: { patient: true, professional: true },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
 const createBilling = async (data: CreateBillingInput): Promise<Billing> => {
   return prisma.billing.create({
     data: {
@@ -88,6 +100,7 @@ const deleteBilling = async (id: string): Promise<boolean> => {
 export {
   getBillingById,
   listBillingsByAppointment,
+  listAllBillings,
   createBilling,
   updateBilling,
   deleteBilling,

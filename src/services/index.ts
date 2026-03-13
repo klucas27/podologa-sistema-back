@@ -43,3 +43,11 @@ export {
   updateAnamnesis,
   deleteAnamnesis,
 } from "./anamnesis.service";
+export {
+  getProfessionalById,
+  listProfessionals,
+  listActiveProfessionals,
+  createProfessional,
+  updateProfessional,
+  deleteProfessional,
+} from "./professional.service";

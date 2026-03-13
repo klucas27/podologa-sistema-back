@@ -8,6 +8,7 @@ import { pathologyRouter } from "./pathology.routes";
 import { evolutionPathologyRouter } from "./evolutionPathology.routes";
 import { billingRouter } from "./billing.routes";
 import { anamnesisRouter } from "./anamnesis.routes";
+import { professionalRouter } from "./professional.routes";
 import { authMiddleware } from "../middlewares/auth.middleware";
 
 const router = Router();
@@ -34,5 +35,6 @@ router.use("/pathologies", pathologyRouter);
 router.use("/evolution-pathologies", evolutionPathologyRouter);
 router.use("/billings", billingRouter);
 router.use("/anamneses", anamnesisRouter);
+router.use("/professionals", professionalRouter);
 
 export { router };

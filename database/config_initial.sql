@@ -30,11 +30,12 @@ SET FOREIGN_KEY_CHECKS=0;
 SOURCE patient.sql;
 SOURCE user.sql;
 SOURCE pathologies.sql;
+SOURCE professional.sql;
 
 -- 2) anamnesis (depends on patient)
 SOURCE anamnesis.sql;
 
--- 3) appointments (depends on patient, user)
+-- 3) appointments (depends on patient, user, professional)
 SOURCE appointments.sql;
 
 -- 4) clinical evolutions and related
