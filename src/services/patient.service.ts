@@ -37,7 +37,14 @@ const listPatients = async (search?: string): Promise<Patient[]> => {
   return prisma.patient.findMany({
     where,
     orderBy: { fullName: "asc" },
-    include: { _count: { select: { anamneses: true } } },
+    include: {
+      _count: { select: { anamneses: true } },
+      anamneses: {
+        where: { deletedAt: null },
+        take: 1,
+        orderBy: { createdAt: "desc" },
+      },
+    },
   });
 };
 
@@ -85,5 +92,52 @@ const deletePatient = async (id: string): Promise<boolean> => {
   return true;
 };
 
-export { getPatientById, listPatients, createPatient, updatePatient, deletePatient };
+const forceDeletePatient = async (id: string): Promise<boolean> => {
+  const existing = await prisma.patient.findUnique({ where: { id } });
+  if (!existing) return false;
+
+  await prisma.$transaction(async (tx) => {
+    const appointments = await tx.appointment.findMany({
+      where: { patientId: id },
+      select: { id: true },
+    });
+    const appointmentIds = appointments.map((a) => a.id);
+
+    if (appointmentIds.length > 0) {
+      const evolutions = await tx.clinicalEvolution.findMany({
+        where: { appointmentId: { in: appointmentIds } },
+        select: { id: true },
+      });
+      const evolutionIds = evolutions.map((e) => e.id);
+
+      if (evolutionIds.length > 0) {
+        await tx.evolutionPathology.deleteMany({
+          where: { evolutionId: { in: evolutionIds } },
+        });
+      }
+
+      await tx.clinicalEvolution.deleteMany({
+        where: { appointmentId: { in: appointmentIds } },
+      });
+
+      await tx.billing.deleteMany({
+        where: { appointmentId: { in: appointmentIds } },
+      });
+
+      await tx.appointment.deleteMany({
+        where: { patientId: id },
+      });
+    }
+
+    await tx.anamnesis.deleteMany({
+      where: { patientId: id },
+    });
+
+    await tx.patient.delete({ where: { id } });
+  });
+
+  return true;
+};
+
+export { getPatientById, listPatients, createPatient, updatePatient, deletePatient, forceDeletePatient };
 export type { CreatePatientInput, UpdatePatientInput };

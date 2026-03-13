@@ -5,6 +5,7 @@ import {
   createPatient,
   updatePatient,
   deletePatient,
+  forceDeletePatient,
 } from "../services/patient.service";
 import type { CreatePatientInput, UpdatePatientInput } from "../services/patient.service";
 
@@ -86,10 +87,23 @@ const deletePatientController = async (req: Request, res: Response): Promise<voi
   res.status(200).json({ status: "ok", message: "Paciente removido com sucesso" });
 };
 
+const forceDeletePatientController = async (req: Request, res: Response): Promise<void> => {
+  const id = req.params["id"] as string;
+  const deleted = await forceDeletePatient(id);
+
+  if (!deleted) {
+    res.status(404).json({ status: "error", message: "Paciente não encontrado" });
+    return;
+  }
+
+  res.status(200).json({ status: "ok", message: "Paciente e todos os registros vinculados removidos com sucesso" });
+};
+
 export {
   findPatientById,
   listAllPatients,
   createPatientController,
   updatePatientController,
   deletePatientController,
+  forceDeletePatientController,
 };

@@ -79,7 +79,12 @@ const listAppointments = async (): Promise<Appointment[]> => {
   return prisma.appointment.findMany({
     where: { deletedAt: null },
     include: {
-      patient: { include: { _count: { select: { anamneses: true } } } },
+      patient: {
+        include: {
+          _count: { select: { anamneses: true } },
+          anamneses: { where: { deletedAt: null }, take: 1, orderBy: { createdAt: "desc" } },
+        },
+      },
       user: true,
       professional: true,
     },
@@ -163,16 +168,21 @@ const updateAppointment = async (
           "Apenas consultas 'Agendada' ou 'Confirmada' podem ser iniciadas",
         );
       }
+      const now = new Date();
       updateData.status = "in_progress";
-      updateData.actualStartTime = new Date();
+      updateData.actualStartTime = now;
+      updateData.scheduledStart = now;
+      updateData.scheduledDate = now;
     } else if (data.status === "completed") {
       if (existing.status !== "in_progress") {
         throw new AppointmentStatusError(
           "Apenas consultas 'Em Atendimento' podem ser finalizadas",
         );
       }
+      const now = new Date();
       updateData.status = "completed";
-      updateData.actualEndTime = new Date();
+      updateData.actualEndTime = now;
+      updateData.scheduledEnd = now;
     } else {
       updateData.status = data.status;
     }

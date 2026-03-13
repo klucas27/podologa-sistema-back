@@ -5,6 +5,7 @@ import {
   createPatientController,
   updatePatientController,
   deletePatientController,
+  forceDeletePatientController,
 } from "../controllers/patient.controller";
 
 const patientRouter = Router();
@@ -38,5 +39,11 @@ patientRouter.patch("/:id", updatePatientController);
  * Remove um paciente.
  */
 patientRouter.delete("/:id", deletePatientController);
+
+/**
+ * DELETE /api/patients/:id/force
+ * Remove um paciente e todos os registros vinculados (cascata).
+ */
+patientRouter.delete("/:id/force", forceDeletePatientController);
 
 export { patientRouter };
