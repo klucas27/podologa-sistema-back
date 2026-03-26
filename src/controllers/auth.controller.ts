@@ -12,7 +12,7 @@ import { env } from "../configs";
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: env.isProd,
-  sameSite: "strict" as const,
+  sameSite: (env.isProd ? "none" : "strict") as const,
   signed: true,
   maxAge: 24 * 60 * 60 * 1000, // 1 dia
 };
@@ -105,7 +105,7 @@ const logoutController = (_req: Request, res: Response): void => {
   res.clearCookie("token", {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: "strict" as const,
+    sameSite: (env.isProd ? "none" : "strict") as const,
     signed: true,
   });
 
