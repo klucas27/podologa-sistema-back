@@ -11,7 +11,7 @@ import { env } from "./env";
  */
 export const helmetOptions: HelmetOptions = {
   contentSecurityPolicy: env.isDev ? false : undefined,
-  crossOriginResourcePolicy: { policy: "same-site" },
-  referrerPolicy: { policy: "same-origin" },
+  crossOriginResourcePolicy: { policy: env.isProd ? "cross-origin" : "same-site" },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   xPoweredBy: false,
 };
