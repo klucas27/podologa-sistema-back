@@ -51,3 +51,4 @@ export {
   updateProfessional,
   deleteProfessional,
 } from "./professional.service";
+export { getDashboardData } from "./dashboard.service";

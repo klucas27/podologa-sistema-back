@@ -61,3 +61,4 @@ export {
   updateAnamnesisController,
   deleteAnamnesisController,
 } from "./anamnesis.controller";
+export { getDashboardController } from "./dashboard.controller";
