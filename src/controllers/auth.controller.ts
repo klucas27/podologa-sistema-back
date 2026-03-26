@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { Request, Response, CookieOptions } from "express";
 import {
   login,
   getAuthenticatedUser,
@@ -9,10 +9,10 @@ import {
 import { generateCsrfToken } from "../middlewares/csrf.middleware";
 import { env } from "../configs";
 
-const COOKIE_OPTIONS = {
+const COOKIE_OPTIONS: CookieOptions = {
   httpOnly: true,
   secure: env.isProd,
-  sameSite: (env.isProd ? "none" : "strict") as const,
+  sameSite: (env.isProd ? "none" : "strict") as "none" | "strict",
   signed: true,
   maxAge: 24 * 60 * 60 * 1000, // 1 dia
 };
@@ -105,7 +105,7 @@ const logoutController = (_req: Request, res: Response): void => {
   res.clearCookie("token", {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: (env.isProd ? "none" : "strict") as const,
+    sameSite: (env.isProd ? "none" : "strict") as "none" | "strict",
     signed: true,
   });
 
