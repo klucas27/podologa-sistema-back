@@ -9,12 +9,22 @@ import {
 import { generateCsrfToken } from "../middlewares/csrf.middleware";
 import { env } from "../configs";
 
+// const COOKIE_OPTIONS: CookieOptions = {
+//   httpOnly: true,
+//   secure: env.isProd,
+//   sameSite: (env.isProd ? "none" : "strict") as "none" | "strict",
+//   signed: true,
+//   maxAge: 24 * 60 * 60 * 1000, // 1 dia
+// };
+
+
+// auth.controller.ts
 const COOKIE_OPTIONS: CookieOptions = {
   httpOnly: true,
   secure: env.isProd,
-  sameSite: (env.isProd ? "none" : "strict") as "none" | "strict",
+  sameSite: env.isProd ? "lax" : "strict", // ← era "none", agora "lax"
   signed: true,
-  maxAge: 24 * 60 * 60 * 1000, // 1 dia
+  maxAge: 24 * 60 * 60 * 1000,
 };
 
 /**
