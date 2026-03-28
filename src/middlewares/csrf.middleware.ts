@@ -1,6 +1,6 @@
 import { doubleCsrf } from "csrf-csrf";
 import type { Request } from "express";
-import { env } from "../configs";
+import { env } from "../config";
 
 /**
  * Proteção CSRF via Double Submit Cookie Pattern.

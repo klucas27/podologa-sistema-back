@@ -1,15 +1,12 @@
 import { createApp } from "./app";
-import { env } from "./configs";
+import { env } from "./config";
+import { logger } from "./infra";
 
 const app = createApp();
 
 app.listen(env.PORT, () => {
-  console.log(`
-  ╔══════════════════════════════════════════════╗
-  ║  🦶 Podóloga Sistema - Backend               ║
-  ║  Ambiente : ${env.NODE_ENV.padEnd(30)}   ║
-  ║  Porta    : ${String(env.PORT).padEnd(30)}   ║
-  ║  Status   : Servidor rodando!                ║
-  ╚══════════════════════════════════════════════╝
-  `);
+  logger.info(
+    { environment: env.NODE_ENV, port: env.PORT },
+    "Podóloga Sistema - Backend rodando",
+  );
 });

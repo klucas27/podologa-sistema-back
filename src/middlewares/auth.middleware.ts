@@ -1,10 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { env } from "../configs";
+import { env } from "../config";
 
 interface JwtPayload {
   userId: string;
   username: string;
+  roles?: string[];
 }
 
 /**
@@ -40,6 +41,7 @@ export const authMiddleware = (
     req.user = {
       userId: decoded.userId,
       username: decoded.username,
+      roles: decoded.roles ?? [],
     };
 
     next();

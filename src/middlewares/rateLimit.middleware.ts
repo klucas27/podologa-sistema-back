@@ -1,29 +1,28 @@
 import rateLimit from "express-rate-limit";
 
-/**
- * Rate limit global: 500 requisições por IP a cada 15 minutos.
- */
-export const globalLimiter = rateLimit({
+/** Login: 5 req per 15 minutes */
+export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    status: "error",
-    message: "Muitas requisições. Tente novamente mais tarde.",
-  },
+  message: { status: "error", message: "Muitas tentativas de login. Tente novamente mais tarde." },
 });
 
-/**
- * Rate limit para autenticação: 10 tentativas por IP a cada 15 minutos.
- */
-export const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+/** API geral: 100 req per minute */
+export const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { status: "error", message: "Too many requests. Try again later." },
+});
+
+/** Rotas sensíveis: 10 req per minute */
+export const sensitiveLimiter = rateLimit({
+  windowMs: 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: {
-    status: "error",
-    message: "Muitas tentativas de login. Tente novamente mais tarde.",
-  },
+  message: { status: "error", message: "Muitas requisições nesta rota sensível." },
 });

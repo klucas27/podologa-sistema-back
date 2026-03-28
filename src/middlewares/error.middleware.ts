@@ -1,24 +1,43 @@
 import type { Request, Response, NextFunction } from "express";
 import { Prisma } from "@prisma/client";
-import { env } from "../configs";
+import { ZodError } from "zod";
+import { AppError } from "../shared/errors";
+import { logger } from "../infra";
+import { env } from "../config";
 
-/**
- * Middleware global de tratamento de erros.
- *
- * - Trata erros conhecidos do Prisma.
- * - Oculta detalhes internos em produção.
- * - Retorna resposta JSON estruturada.
- */
 export const errorHandler = (
   err: Error,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction,
 ): void => {
-  console.error(`[ERROR] ${err.message}`);
+  const correlationId = req.correlationId;
 
-  if (env.isDev) {
-    console.error(err.stack);
+  // ── AppError (operational errors) ─────────────
+  if (err instanceof AppError) {
+    if (err.statusCode >= 500) {
+      logger.error({ err, correlationId }, err.message);
+    } else {
+      logger.warn({ statusCode: err.statusCode, correlationId }, err.message);
+    }
+
+    res.status(err.statusCode).json({
+      status: "error",
+      message: err.message,
+      ...(correlationId ? { correlationId } : {}),
+    });
+    return;
+  }
+
+  // ── Zod validation errors ─────────────────────
+  if (err instanceof ZodError) {
+    res.status(400).json({
+      status: "error",
+      message: "Dados inválidos",
+      issues: err.issues,
+      ...(correlationId ? { correlationId } : {}),
+    });
+    return;
   }
 
   // ── Prisma: registro não encontrado ────────────
@@ -29,6 +48,7 @@ export const errorHandler = (
     res.status(404).json({
       status: "error",
       message: "Registro não encontrado",
+      ...(correlationId ? { correlationId } : {}),
     });
     return;
   }
@@ -41,6 +61,7 @@ export const errorHandler = (
     res.status(409).json({
       status: "error",
       message: "Registro já existe (violação de unicidade)",
+      ...(correlationId ? { correlationId } : {}),
     });
     return;
   }
@@ -53,6 +74,7 @@ export const errorHandler = (
     res.status(409).json({
       status: "error",
       message: "Operação bloqueada por referência existente",
+      ...(correlationId ? { correlationId } : {}),
     });
     return;
   }
@@ -62,15 +84,17 @@ export const errorHandler = (
     res.status(400).json({
       status: "error",
       message: "Dados inválidos na requisição",
+      ...(correlationId ? { correlationId } : {}),
     });
     return;
   }
 
-  // ── Erro genérico ─────────────────────────────
-  const statusCode = (err as { statusCode?: number }).statusCode || 500;
+  // ── Erro genérico (não-operacional) ────────────
+  logger.error({ err, correlationId, path: req.path }, "Unhandled error");
 
-  res.status(statusCode).json({
+  res.status(500).json({
     status: "error",
     message: env.isProd ? "Erro interno do servidor" : err.message,
+    ...(correlationId ? { correlationId } : {}),
   });
 };
