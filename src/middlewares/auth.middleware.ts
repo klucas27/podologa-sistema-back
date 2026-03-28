@@ -10,15 +10,21 @@ interface JwtPayload {
 /**
  * Middleware de autenticação.
  *
- * Lê o JWT do cookie assinado "token", verifica a assinatura
- * e anexa os dados do usuário em req.user.
+ * Lê o JWT do cookie HttpOnly assinado "access_token", verifica a assinatura
+ * com JWT_ACCESS_SECRET e anexa os dados do usuário em req.user.
+ *
+ * O cookie é HttpOnly + Secure + SameSite=Strict + signed, portanto:
+ * - Não pode ser lido por JS no browser (mitiga XSS)
+ * - Só trafega em HTTPS (mitiga MITM)
+ * - Não é enviado em requests cross-site (mitiga CSRF)
+ * - Tem HMAC de integridade (detecta tampering)
  */
 export const authMiddleware = (
   req: Request,
   res: Response,
   next: NextFunction,
 ): void => {
-  const token = req.signedCookies?.["token"] as string | undefined;
+  const token = req.signedCookies?.["access_token"] as string | undefined;
 
   if (!token) {
     res.status(401).json({
@@ -29,7 +35,7 @@ export const authMiddleware = (
   }
 
   try {
-    const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as JwtPayload;
 
     req.user = {
       userId: decoded.userId,

@@ -64,10 +64,28 @@ model User {
     updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
     deletedAt        DateTime? @map("deleted_at") @db.Timestamp(0)
 
-    appointments Appointment[]
+    appointments   Appointment[]
+    refreshTokens  RefreshToken[]
 
     @@index([username], map: "idx_user_username")
     @@map("user")
+}
+
+// ── Refresh Token ────────────────────────────
+
+model RefreshToken {
+    id        String    @id @db.VarChar(36)
+    userId    String    @map("user_id") @db.VarChar(36)
+    tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+    expiresAt DateTime  @map("expires_at") @db.Timestamp(0)
+    createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
+    revokedAt DateTime? @map("revoked_at") @db.Timestamp(0)
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+    @@index([userId], map: "idx_refresh_token_user")
+    @@index([expiresAt], map: "idx_refresh_token_expires")
+    @@map("refresh_token")
 }
 
 // ── Professional ─────────────────────────────

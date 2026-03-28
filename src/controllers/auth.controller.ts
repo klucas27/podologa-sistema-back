@@ -1,31 +1,72 @@
 import type { Request, Response, CookieOptions } from "express";
 import {
   login,
-  getAuthenticatedUser,
   register,
+  rotateRefreshToken,
+  revokeRefreshToken,
+  getAuthenticatedUser,
   changePassword,
   updateWorkingHours,
 } from "../services/auth.service";
 import { generateCsrfToken } from "../middlewares/csrf.middleware";
 import { env } from "../configs";
 
-// const COOKIE_OPTIONS: CookieOptions = {
-//   httpOnly: true,
-//   secure: env.isProd,
-//   sameSite: (env.isProd ? "none" : "strict") as "none" | "strict",
-//   signed: true,
-//   maxAge: 24 * 60 * 60 * 1000, // 1 dia
-// };
+// ── Cookie options ──────────────────────────────────────────
+//
+// HttpOnly: impede leitura via document.cookie → mitiga XSS token theft
+// Secure: cookie só trafega em HTTPS → mitiga interceptação em HTTP
+// SameSite=Strict: cookie NUNCA enviado em requisições cross-site → mitiga CSRF
+// signed: HMAC do valor do cookie → detecta tampering
+//
+// O access_token tem path=/ (enviado em todas as rotas da API).
+// O refresh_token tem path=/api/auth (enviado apenas em rotas de auth),
+// reduzindo a superfície de exposição.
 
-
-// auth.controller.ts
-const COOKIE_OPTIONS: CookieOptions = {
+const ACCESS_COOKIE_OPTIONS: CookieOptions = {
   httpOnly: true,
   secure: env.isProd,
-  sameSite: env.isProd ? "lax" : "strict", // ← era "none", agora "lax"
+  sameSite: "strict",
   signed: true,
-  maxAge: 24 * 60 * 60 * 1000,
+  maxAge: 15 * 60 * 1000, // 15 minutos
+  path: "/",
 };
+
+const REFRESH_COOKIE_OPTIONS: CookieOptions = {
+  httpOnly: true,
+  secure: env.isProd,
+  sameSite: "strict",
+  signed: true,
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+  path: "/api/auth",
+};
+
+function setAuthCookies(
+  res: Response,
+  accessToken: string,
+  refreshToken: string,
+): void {
+  res.cookie("access_token", accessToken, ACCESS_COOKIE_OPTIONS);
+  res.cookie("refresh_token", refreshToken, REFRESH_COOKIE_OPTIONS);
+}
+
+function clearAuthCookies(res: Response): void {
+  res.clearCookie("access_token", {
+    httpOnly: true,
+    secure: env.isProd,
+    sameSite: "strict",
+    signed: true,
+    path: "/",
+  });
+  res.clearCookie("refresh_token", {
+    httpOnly: true,
+    secure: env.isProd,
+    sameSite: "strict",
+    signed: true,
+    path: "/api/auth",
+  });
+}
+
+// ── Controllers ─────────────────────────────────────────────
 
 /**
  * POST /api/auth/login
@@ -54,9 +95,8 @@ const loginController = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
+  setAuthCookies(res, result.tokens.accessToken, result.tokens.refreshToken);
   const csrfToken = generateCsrfToken(req, res);
-
-  res.cookie("token", result.token, COOKIE_OPTIONS);
 
   res.status(200).json({
     status: "ok",
@@ -84,40 +124,84 @@ const registerUser = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  try {
-    const result = await register(username, password, professionalName ?? null);
+  const result = await register(username, password, professionalName ?? null);
 
-    if (!result) {
-      res
-        .status(409)
-        .json({ status: "error", message: "Username já está em uso" });
-      return;
-    }
-
-    const csrfToken = generateCsrfToken(req, res);
-
-    res.cookie("token", result.token, COOKIE_OPTIONS);
-
+  if (!result) {
     res
-      .status(201)
-      .json({ status: "ok", data: { user: result.user, csrfToken } });
-  } catch (err) {
-    // Se ocorrer erro de constraint do Prisma, o middleware global de erro irá
-    // normalizar para a resposta apropriada. Aqui retornamos 500 genérico.
-    res.status(500).json({ status: "error", message: "Erro ao criar usuário" });
+      .status(409)
+      .json({ status: "error", message: "Username já está em uso" });
+    return;
   }
+
+  setAuthCookies(res, result.tokens.accessToken, result.tokens.refreshToken);
+  const csrfToken = generateCsrfToken(req, res);
+
+  res
+    .status(201)
+    .json({ status: "ok", data: { user: result.user, csrfToken } });
+};
+
+/**
+ * POST /api/auth/refresh
+ *
+ * Rotação do refresh token: o token antigo é revogado e um novo par é emitido.
+ * Se um token já revogado for reutilizado, TODOS os tokens do usuário são
+ * invalidados (detecção de roubo).
+ */
+const refreshController = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const oldRefreshToken = req.signedCookies?.["refresh_token"] as
+    | string
+    | undefined;
+
+  if (!oldRefreshToken) {
+    res.status(401).json({
+      status: "error",
+      message: "Refresh token ausente",
+    });
+    return;
+  }
+
+  const tokens = await rotateRefreshToken(oldRefreshToken);
+
+  if (!tokens) {
+    clearAuthCookies(res);
+    res.status(401).json({
+      status: "error",
+      message: "Refresh token inválido ou expirado. Faça login novamente.",
+    });
+    return;
+  }
+
+  setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+  const csrfToken = generateCsrfToken(req, res);
+
+  res.status(200).json({
+    status: "ok",
+    data: { csrfToken },
+  });
 };
 
 /**
  * POST /api/auth/logout
+ *
+ * Revoga o refresh token ativo e limpa ambos os cookies.
  */
-const logoutController = (_req: Request, res: Response): void => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: env.isProd,
-    sameSite: (env.isProd ? "none" : "strict") as "none" | "strict",
-    signed: true,
-  });
+const logoutController = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  const refreshToken = req.signedCookies?.["refresh_token"] as
+    | string
+    | undefined;
+
+  if (refreshToken) {
+    await revokeRefreshToken(refreshToken);
+  }
+
+  clearAuthCookies(res);
 
   res.status(200).json({
     status: "ok",
@@ -127,6 +211,10 @@ const logoutController = (_req: Request, res: Response): void => {
 
 /**
  * GET /api/auth/me
+ *
+ * Retorna dados do usuário + novo CSRF token.
+ * Essencial no reload da página: o access_token cookie sobrevive ao refresh
+ * do browser, mas o csrfToken (armazenado em memória JS) é perdido.
  */
 const meController = async (req: Request, res: Response): Promise<void> => {
   const userId = req.user?.userId;
@@ -149,18 +237,23 @@ const meController = async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
+  const csrfToken = generateCsrfToken(req, res);
+
   res.status(200).json({
     status: "ok",
-    data: user,
+    data: { user, csrfToken },
   });
 };
 
-export { loginController, logoutController, meController, registerUser };
-
 /**
  * PATCH /api/auth/password
+ *
+ * Altera a senha e revoga TODAS as sessões ativas (force re-login).
  */
-const changePasswordController = async (req: Request, res: Response): Promise<void> => {
+const changePasswordController = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   const userId = req.user?.userId;
 
   if (!userId) {
@@ -199,13 +292,21 @@ const changePasswordController = async (req: Request, res: Response): Promise<vo
     return;
   }
 
-  res.status(200).json({ status: "ok", message: "Senha alterada com sucesso" });
+  clearAuthCookies(res);
+
+  res.status(200).json({
+    status: "ok",
+    message: "Senha alterada com sucesso. Faça login novamente.",
+  });
 };
 
 /**
  * PATCH /api/auth/working-hours
  */
-const updateWorkingHoursController = async (req: Request, res: Response): Promise<void> => {
+const updateWorkingHoursController = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
   const userId = req.user?.userId;
 
   if (!userId) {
@@ -247,4 +348,12 @@ const updateWorkingHoursController = async (req: Request, res: Response): Promis
   res.status(200).json({ status: "ok", data: user });
 };
 
-export { changePasswordController, updateWorkingHoursController };
+export {
+  loginController,
+  logoutController,
+  meController,
+  registerUser,
+  refreshController,
+  changePasswordController,
+  updateWorkingHoursController,
+};

@@ -11,12 +11,11 @@ import { anamnesisRouter } from "./anamnesis.routes";
 import { professionalRouter } from "./professional.routes";
 import { dashboardRouter } from "./dashboard.routes";
 import { authMiddleware } from "../middlewares/auth.middleware";
+import { doubleCsrfProtection } from "../middlewares/csrf.middleware";
 
 const router = Router();
 
 /**
- * Registro centralizado de todas as rotas da aplicação.
- *
  * ── Rotas públicas ──────────────────────────────
  * Não exigem autenticação.
  */
@@ -24,10 +23,13 @@ router.use("/health", healthRouter);
 router.use("/auth", authRouter);
 
 /**
- * ── Rotas autenticadas ──────────────────────────
- * Todas as rotas abaixo exigem cookie JWT válido.
+ * ── Rotas autenticadas + CSRF ───────────────────
+ * Todas as rotas abaixo exigem:
+ * 1. Cookie JWT válido (access_token) — authMiddleware
+ * 2. Token CSRF válido no header X-CSRF-Token em POST/PUT/PATCH/DELETE — doubleCsrfProtection
  */
 router.use(authMiddleware);
+router.use(doubleCsrfProtection);
 
 router.use("/patients", patientRouter);
 router.use("/appointments", appointmentRouter);

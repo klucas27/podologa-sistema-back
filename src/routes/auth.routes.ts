@@ -4,47 +4,39 @@ import {
   logoutController,
   meController,
   registerUser,
+  refreshController,
   changePasswordController,
   updateWorkingHoursController,
 } from "../controllers/auth.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
+import { doubleCsrfProtection } from "../middlewares/csrf.middleware";
 import { authLimiter } from "../middlewares/rateLimit.middleware";
 
 const authRouter = Router();
 
-/**
- * POST /api/auth/login
- * Autentica o usuário e retorna JWT em cookie HTTP-only.
- */
+// ── Rotas públicas (sem auth, sem CSRF) ──────────────────
 authRouter.post("/login", authLimiter, loginController);
-
-/**
- * POST /api/auth/register
- */
 authRouter.post("/register", authLimiter, registerUser);
 
-/**
- * POST /api/auth/logout
- * Remove o cookie de autenticação.
- */
+// ── Refresh — rate-limited, sem CSRF (access token expirado) ─
+authRouter.post("/refresh", authLimiter, refreshController);
+
+// ── Logout — não exige auth (cookie pode estar expirado) ─
 authRouter.post("/logout", logoutController);
 
-/**
- * GET /api/auth/me
- * Retorna os dados do usuário autenticado.
- */
+// ── Rotas autenticadas + CSRF ────────────────────────────
 authRouter.get("/me", authMiddleware, meController);
-
-/**
- * PATCH /api/auth/password
- * Altera a senha do usuário autenticado.
- */
-authRouter.patch("/password", authMiddleware, changePasswordController);
-
-/**
- * PATCH /api/auth/working-hours
- * Atualiza o horário de expediente do usuário autenticado.
- */
-authRouter.patch("/working-hours", authMiddleware, updateWorkingHoursController);
+authRouter.patch(
+  "/password",
+  authMiddleware,
+  doubleCsrfProtection,
+  changePasswordController,
+);
+authRouter.patch(
+  "/working-hours",
+  authMiddleware,
+  doubleCsrfProtection,
+  updateWorkingHoursController,
+);
 
 export { authRouter };
