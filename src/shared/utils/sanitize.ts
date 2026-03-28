@@ -1,3 +1,5 @@
+import { Decimal } from "@prisma/client/runtime/library";
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -17,6 +19,8 @@ export function sanitizeOutput<T>(obj: T): T {
   if (typeof obj === "number" || typeof obj === "boolean") return obj;
 
   if (obj instanceof Date) return obj;
+
+  if (obj instanceof Decimal) return obj.toString() as unknown as T;
 
   if (Array.isArray(obj)) {
     return obj.map((item) => sanitizeOutput(item)) as unknown as T;
