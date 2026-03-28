@@ -7,12 +7,10 @@ import type { createAuthService } from "./auth.service";
 type AuthService = ReturnType<typeof createAuthService>;
 
 export function createAuthController(service: AuthService, envConfig: Env) {
-  const sameSitePolicy = envConfig.isProd ? "none" as const : "strict" as const;
-
   const ACCESS_COOKIE_OPTIONS: CookieOptions = {
     httpOnly: true,
     secure: envConfig.isProd,
-    sameSite: sameSitePolicy,
+    sameSite: "strict",
     signed: true,
     maxAge: 15 * 60 * 1000,
     path: "/",
@@ -21,7 +19,7 @@ export function createAuthController(service: AuthService, envConfig: Env) {
   const REFRESH_COOKIE_OPTIONS: CookieOptions = {
     httpOnly: true,
     secure: envConfig.isProd,
-    sameSite: sameSitePolicy,
+    sameSite: "strict",
     signed: true,
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: "/api/auth",
@@ -34,10 +32,10 @@ export function createAuthController(service: AuthService, envConfig: Env) {
 
   function clearAuthCookies(res: Response): void {
     res.clearCookie("access_token", {
-      httpOnly: true, secure: envConfig.isProd, sameSite: sameSitePolicy, signed: true, path: "/",
+      httpOnly: true, secure: envConfig.isProd, sameSite: "strict", signed: true, path: "/",
     });
     res.clearCookie("refresh_token", {
-      httpOnly: true, secure: envConfig.isProd, sameSite: sameSitePolicy, signed: true, path: "/api/auth",
+      httpOnly: true, secure: envConfig.isProd, sameSite: "strict", signed: true, path: "/api/auth",
     });
   }
 
