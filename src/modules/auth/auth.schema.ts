@@ -8,7 +8,6 @@ export const loginSchema = z.object({
 export const registerSchema = z.object({
   username: z.string().min(3),
   password: z.string().min(6),
-  professionalName: z.string().optional().nullable(),
 });
 
 export const changePasswordSchema = z.object({

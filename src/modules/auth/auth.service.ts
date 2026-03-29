@@ -9,6 +9,9 @@ import { AuthError, ConflictError } from "../../shared/errors";
 interface TokenPayload {
   userId: string;
   username: string;
+  role: "admin" | "professional";
+  adminId: string;
+  professionalId: string | null;
 }
 
 interface AuthTokens {
@@ -22,6 +25,8 @@ export interface LoginResult {
     id: string;
     username: string;
     professionalName: string | null;
+    role: "admin" | "professional";
+    professionalId: string | null;
   };
 }
 
@@ -68,9 +73,20 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
       const valid = await bcrypt.compare(password, user.passwordHash);
       if (!valid) throw new AuthError("Credenciais inválidas");
 
+      const adminId = user.role === "admin" ? user.id : (user.adminId ?? user.id);
+
+      let professionalId: string | null = null;
+      if (user.role === "professional") {
+        const professional = await repo.findProfessionalByUserId(user.id);
+        if (professional) professionalId = professional.id;
+      }
+
       const tokens = await issueTokenPair({
         userId: user.id,
         username: user.username,
+        role: user.role as "admin" | "professional",
+        adminId,
+        professionalId,
       });
 
       return {
@@ -79,6 +95,8 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
           id: user.id,
           username: user.username,
           professionalName: user.professionalName,
+          role: user.role as "admin" | "professional",
+          professionalId,
         },
       };
     },
@@ -86,7 +104,6 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
     async register(
       username: string,
       password: string,
-      professionalName: string | null,
     ): Promise<LoginResult> {
       const existing = await repo.findUserByUsername(username);
       if (existing) throw new ConflictError("Username já está em uso");
@@ -96,12 +113,16 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
         id: crypto.randomUUID(),
         username,
         passwordHash,
-        professionalName,
+        professionalName: null,
+        role: "admin",
       });
 
       const tokens = await issueTokenPair({
         userId: user.id,
         username: user.username,
+        role: "admin",
+        adminId: user.id,
+        professionalId: null,
       });
 
       return {
@@ -110,6 +131,8 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
           id: user.id,
           username: user.username,
           professionalName: user.professionalName,
+          role: "admin",
+          professionalId: null,
         },
       };
     },
@@ -135,7 +158,26 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
       }
 
       await repo.revokeRefreshToken(stored.id);
-      return issueTokenPair({ userId: payload.userId, username: payload.username });
+
+      // Re-fetch user to get current role/adminId in case they changed
+      const user = await repo.findUserByIdFull(payload.userId);
+      if (!user || user.deletedAt) throw new AuthError("Usuário não encontrado");
+
+      const adminId = user.role === "admin" ? user.id : (user.adminId ?? user.id);
+
+      let professionalId: string | null = null;
+      if (user.role === "professional") {
+        const professional = await repo.findProfessionalByUserId(user.id);
+        if (professional) professionalId = professional.id;
+      }
+
+      return issueTokenPair({
+        userId: payload.userId,
+        username: payload.username,
+        role: user.role as "admin" | "professional",
+        adminId,
+        professionalId,
+      });
     },
 
     async revokeRefreshToken(rawToken: string): Promise<void> {

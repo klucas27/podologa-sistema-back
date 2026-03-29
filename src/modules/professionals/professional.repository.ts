@@ -2,12 +2,16 @@ import type { PrismaClient, Professional, Prisma } from "@prisma/client";
 
 export function createProfessionalRepository(prisma: PrismaClient) {
   return {
-    findById(id: string): Promise<Professional | null> {
-      return prisma.professional.findFirst({ where: { id, deletedAt: null } });
+    findById(id: string, adminId: string): Promise<Professional | null> {
+      return prisma.professional.findFirst({ where: { id, adminId, deletedAt: null } });
     },
 
-    findMany(search?: string): Promise<Professional[]> {
-      const where: Prisma.ProfessionalWhereInput = { deletedAt: null };
+    findByUserId(userId: string): Promise<Professional | null> {
+      return prisma.professional.findFirst({ where: { userId, deletedAt: null } });
+    },
+
+    findMany(adminId: string, search?: string): Promise<Professional[]> {
+      const where: Prisma.ProfessionalWhereInput = { adminId, deletedAt: null };
 
       if (search) {
         where.OR = [
@@ -22,9 +26,9 @@ export function createProfessionalRepository(prisma: PrismaClient) {
       });
     },
 
-    findActive(): Promise<Professional[]> {
+    findActive(adminId: string): Promise<Professional[]> {
       return prisma.professional.findMany({
-        where: { deletedAt: null, isActive: true },
+        where: { adminId, deletedAt: null, isActive: true },
         orderBy: { fullName: "asc" },
       });
     },
@@ -42,6 +46,10 @@ export function createProfessionalRepository(prisma: PrismaClient) {
         where: { id },
         data: { deletedAt: new Date() },
       });
+    },
+
+    getPrisma(): PrismaClient {
+      return prisma;
     },
   };
 }

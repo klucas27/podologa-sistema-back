@@ -31,13 +31,17 @@ model Patient {
     neighborhood  String?       @db.VarChar(100)
     city          String?       @db.VarChar(100)
     state         String?       @db.Char(2)
+    adminId       String        @map("admin_id") @db.VarChar(36)
 
-    appointments Appointment[]
-    anamneses    Anamnesis[]
+    admin                User                  @relation("AdminPatients", fields: [adminId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    appointments         Appointment[]
+    anamneses            Anamnesis[]
+    patientProfessionals PatientProfessional[]
 
     @@index([fullName], map: "idx_full_name")
     @@index([city, state], map: "idx_city_state")
     @@index([phoneNumber], map: "idx_phone")
+    @@index([adminId], map: "idx_patient_admin_id")
     @@map("patient")
 }
 
@@ -58,17 +62,32 @@ model User {
     username         String    @unique(map: "uc_user_username") @db.VarChar(191)
     passwordHash     String    @map("password_hash") @db.VarChar(255)
     professionalName String?   @map("professional_name") @db.VarChar(200)
+    role             UserRole  @default(admin)
+    adminId          String?   @map("admin_id") @db.VarChar(36)
     workdayStart     String    @default("08:00") @map("workday_start") @db.VarChar(5)
     workdayEnd       String    @default("18:00") @map("workday_end") @db.VarChar(5)
     createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
     updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
     deletedAt        DateTime? @map("deleted_at") @db.Timestamp(0)
 
+    admin          User?          @relation("AdminUsers", fields: [adminId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+    managedUsers   User[]         @relation("AdminUsers")
     appointments   Appointment[]
     refreshTokens  RefreshToken[]
+    professionals  Professional[] @relation("AdminProfessionals")
+    professional   Professional?  @relation("ProfessionalUser")
+    patients       Patient[]      @relation("AdminPatients")
 
     @@index([username], map: "idx_user_username")
+    @@index([adminId], map: "idx_user_admin_id")
     @@map("user")
+}
+
+enum UserRole {
+    admin
+    professional
+
+    @@map("user_role")
 }
 
 // ── Refresh Token ────────────────────────────
@@ -97,16 +116,37 @@ model Professional {
     phoneNumber String?   @map("phone_number") @db.VarChar(20)
     email       String?   @unique(map: "uc_professional_email") @db.VarChar(191)
     isActive    Boolean   @default(true) @map("is_active") @db.TinyInt
+    adminId     String    @map("admin_id") @db.VarChar(36)
+    userId      String?   @unique(map: "uc_professional_user_id") @map("user_id") @db.VarChar(36)
     createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
     updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
     deletedAt   DateTime? @map("deleted_at") @db.Timestamp(0)
 
-    appointments Appointment[]
+    admin                User                  @relation("AdminProfessionals", fields: [adminId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+    user                 User?                 @relation("ProfessionalUser", fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+    appointments         Appointment[]
+    patientProfessionals PatientProfessional[]
 
     @@index([fullName], map: "idx_professional_full_name")
     @@index([isActive], map: "idx_professional_is_active")
     @@index([deletedAt], map: "idx_professional_deleted_at")
+    @@index([adminId], map: "idx_professional_admin_id")
     @@map("professional")
+}
+
+// ── Patient–Professional (N:N pivot) ─────────
+
+model PatientProfessional {
+    patientId      String   @map("patient_id") @db.VarChar(36)
+    professionalId String   @map("professional_id") @db.VarChar(36)
+    createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+
+    patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+    @@id([patientId, professionalId])
+    @@index([professionalId], map: "idx_patient_professional_prof")
+    @@map("patient_professional")
 }
 
 // ── Appointment ──────────────────────────────

@@ -31,8 +31,8 @@ export function createBillingService(repo: BillingRepository) {
       return repo.findByAppointment(appointmentId);
     },
 
-    listAll(): Promise<Billing[]> {
-      return repo.findAll();
+    listAll(filters?: { adminId?: string; professionalId?: string }): Promise<Billing[]> {
+      return repo.findAll(filters);
     },
 
     create(data: CreateBillingInput): Promise<Billing> {
@@ -52,8 +52,8 @@ export function createBillingService(repo: BillingRepository) {
 
       const updateData: Record<string, unknown> = {};
       if (data.amount !== undefined) updateData["amount"] = new Decimal(data.amount);
-      if (data.paymentMethod) updateData["paymentMethod"] = data.paymentMethod;
-      if (data.status) updateData["status"] = data.status;
+      if (data.paymentMethod !== undefined) updateData["paymentMethod"] = data.paymentMethod;
+      if (data.status !== undefined) updateData["status"] = data.status;
       if (data.paidAt !== undefined) updateData["paidAt"] = data.paidAt ? new Date(data.paidAt) : null;
 
       return repo.update(id, updateData);

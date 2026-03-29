@@ -52,10 +52,10 @@ export function createAuthController(service: AuthService, envConfig: Env) {
 
     async register(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const { username, password, professionalName } = req.body as {
-          username: string; password: string; professionalName?: string | null;
+        const { username, password } = req.body as {
+          username: string; password: string;
         };
-        const result = await service.register(username, password, professionalName ?? null);
+        const result = await service.register(username, password);
         setAuthCookies(res, result.tokens.accessToken, result.tokens.refreshToken);
         const csrfToken = generateCsrfToken(req, res);
         res.status(201).json({ status: "ok", data: { user: sanitizeOutput(result.user), csrfToken } });
@@ -103,7 +103,17 @@ export function createAuthController(service: AuthService, envConfig: Env) {
           return;
         }
         const csrfToken = generateCsrfToken(req, res);
-        res.status(200).json({ status: "ok", data: { user: sanitizeOutput(user), csrfToken } });
+        res.status(200).json({
+          status: "ok",
+          data: {
+            user: sanitizeOutput({
+              ...user,
+              role: (user as Record<string, unknown>).role ?? "admin",
+              professionalId: req.user?.professionalId ?? null,
+            }),
+            csrfToken,
+          },
+        });
       } catch (err) { next(err); }
     },
 

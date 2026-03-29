@@ -2,19 +2,19 @@ import type { PrismaClient, Patient, Prisma } from "@prisma/client";
 
 export function createPatientRepository(prisma: PrismaClient) {
   return {
-    findById(id: string): Promise<Patient | null> {
-      return prisma.patient.findUnique({ where: { id } });
+    findById(id: string, adminId: string): Promise<Patient | null> {
+      return prisma.patient.findFirst({ where: { id, adminId } });
     },
 
-    findMany(search?: string): Promise<Patient[]> {
-      const where: Prisma.PatientWhereInput | undefined = search
-        ? {
-            OR: [
-              { fullName: { contains: search } },
-              { phoneNumber: { contains: search } },
-            ],
-          }
-        : undefined;
+    findMany(adminId: string, search?: string): Promise<Patient[]> {
+      const where: Prisma.PatientWhereInput = { adminId };
+
+      if (search) {
+        where.OR = [
+          { fullName: { contains: search } },
+          { phoneNumber: { contains: search } },
+        ];
+      }
 
       return prisma.patient.findMany({
         where,
@@ -25,6 +25,31 @@ export function createPatientRepository(prisma: PrismaClient) {
             where: { deletedAt: null },
             take: 1,
             orderBy: { createdAt: "desc" },
+          },
+          patientProfessionals: {
+            include: { professional: { select: { id: true, fullName: true } } },
+          },
+        },
+      });
+    },
+
+    findManyByProfessional(professionalId: string): Promise<Patient[]> {
+      return prisma.patient.findMany({
+        where: {
+          patientProfessionals: {
+            some: { professionalId },
+          },
+        },
+        orderBy: { fullName: "asc" },
+        include: {
+          _count: { select: { anamneses: true } },
+          anamneses: {
+            where: { deletedAt: null },
+            take: 1,
+            orderBy: { createdAt: "desc" },
+          },
+          patientProfessionals: {
+            include: { professional: { select: { id: true, fullName: true } } },
           },
         },
       });
@@ -40,6 +65,20 @@ export function createPatientRepository(prisma: PrismaClient) {
 
     delete(id: string): Promise<Patient> {
       return prisma.patient.delete({ where: { id } });
+    },
+
+    async setPatientProfessionals(patientId: string, professionalIds: string[]): Promise<void> {
+      await prisma.$transaction(async (tx) => {
+        await tx.patientProfessional.deleteMany({ where: { patientId } });
+        if (professionalIds.length > 0) {
+          await tx.patientProfessional.createMany({
+            data: professionalIds.map((professionalId) => ({
+              patientId,
+              professionalId,
+            })),
+          });
+        }
+      });
     },
 
     async forceDeleteCascade(id: string): Promise<void> {
@@ -76,6 +115,7 @@ export function createPatientRepository(prisma: PrismaClient) {
           });
         }
 
+        await tx.patientProfessional.deleteMany({ where: { patientId: id } });
         await tx.anamnesis.deleteMany({ where: { patientId: id } });
         await tx.patient.delete({ where: { id } });
       });

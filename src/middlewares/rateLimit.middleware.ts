@@ -3,7 +3,7 @@ import rateLimit from "express-rate-limit";
 /** Login: 5 req per 15 minutes */
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 25,
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: "error", message: "Muitas tentativas de login. Tente novamente mais tarde." },
@@ -21,7 +21,7 @@ export const apiLimiter = rateLimit({
 /** Rotas sensíveis: 10 req per minute */
 export const sensitiveLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { status: "error", message: "Muitas requisições nesta rota sensível." },

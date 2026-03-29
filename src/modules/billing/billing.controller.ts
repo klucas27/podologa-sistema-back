@@ -22,9 +22,15 @@ export function createBillingController(service: BillingService) {
       } catch (err) { next(err); }
     },
 
-    async listAll(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    async listAll(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const billings = await service.listAll();
+        const filters: { adminId?: string; professionalId?: string } = {};
+        if (req.user!.role === "professional" && req.user!.professionalId) {
+          filters.professionalId = req.user!.professionalId;
+        } else {
+          filters.adminId = req.user!.adminId;
+        }
+        const billings = await service.listAll(filters);
         res.status(200).json({ status: "ok", data: sanitizeOutput(billings) });
       } catch (err) { next(err); }
     },
@@ -39,7 +45,8 @@ export function createBillingController(service: BillingService) {
     async update(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const id = req.params["id"] as string;
-        const billing = await service.update(id, req.body);
+        const { appointmentId: _, ...updateData } = req.body;
+        const billing = await service.update(id, updateData);
         res.status(200).json({ status: "ok", data: sanitizeOutput(billing) });
       } catch (err) { next(err); }
     },

@@ -21,8 +21,7 @@ import { env } from "../config";
  */
 const { doubleCsrfProtection, generateCsrfToken } = doubleCsrf({
   getSecret: () => env.COOKIE_SECRET,
-  getSessionIdentifier: (req: Request) =>
-    req.signedCookies?.["access_token"] ?? "",
+  getSessionIdentifier: () => "",
   cookieName: "__csrf",
   cookieOptions: {
     httpOnly: true,

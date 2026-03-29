@@ -5,7 +5,10 @@ import { env } from "../config";
 interface JwtPayload {
   userId: string;
   username: string;
+  role?: "admin" | "professional";
+  adminId?: string;
   roles?: string[];
+  professionalId?: string | null;
 }
 
 /**
@@ -38,10 +41,16 @@ export const authMiddleware = (
   try {
     const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as JwtPayload;
 
+    const role = decoded.role ?? "admin";
+    const adminId = decoded.adminId ?? decoded.userId;
+
     req.user = {
       userId: decoded.userId,
       username: decoded.username,
-      roles: decoded.roles ?? [],
+      role,
+      adminId,
+      roles: decoded.roles ?? [role],
+      professionalId: decoded.professionalId ?? null,
     };
 
     next();

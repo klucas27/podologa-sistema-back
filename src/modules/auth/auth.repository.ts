@@ -13,6 +13,8 @@ export function createAuthRepository(prisma: PrismaClient) {
           id: true,
           username: true,
           professionalName: true,
+          role: true,
+          adminId: true,
           workdayStart: true,
           workdayEnd: true,
           createdAt: true,
@@ -24,11 +26,20 @@ export function createAuthRepository(prisma: PrismaClient) {
       return prisma.user.findUnique({ where: { id } });
     },
 
+    findProfessionalByUserId(userId: string) {
+      return prisma.professional.findFirst({
+        where: { userId, deletedAt: null },
+        select: { id: true },
+      });
+    },
+
     createUser(data: {
       id: string;
       username: string;
       passwordHash: string;
       professionalName: string | null;
+      role?: "admin" | "professional";
+      adminId?: string | null;
     }): Promise<User> {
       return prisma.user.create({ data });
     },

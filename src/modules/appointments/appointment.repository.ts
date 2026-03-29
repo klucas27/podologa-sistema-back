@@ -28,9 +28,17 @@ export function createAppointmentRepository(prisma: PrismaClient) {
       });
     },
 
-    findMany(): Promise<Appointment[]> {
+    findMany(filters?: { adminId?: string; professionalId?: string }): Promise<Appointment[]> {
+      const where: Prisma.AppointmentWhereInput = { deletedAt: null };
+
+      if (filters?.professionalId) {
+        where.professionalId = filters.professionalId;
+      } else if (filters?.adminId) {
+        where.user = { OR: [{ id: filters.adminId }, { adminId: filters.adminId }] };
+      }
+
       return prisma.appointment.findMany({
-        where: { deletedAt: null },
+        where,
         include: {
           patient: {
             include: {

@@ -43,8 +43,8 @@ export function createAppointmentService(repo: AppointmentRepository) {
       return appointment;
     },
 
-    list(): Promise<Appointment[]> {
-      return repo.findMany();
+    list(filters?: { adminId?: string; professionalId?: string }): Promise<Appointment[]> {
+      return repo.findMany(filters);
     },
 
     listByPatient(patientId: string): Promise<Appointment[]> {

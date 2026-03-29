@@ -16,9 +16,20 @@ export function createBillingRepository(prisma: PrismaClient) {
       });
     },
 
-    findAll(): Promise<Billing[]> {
+    findAll(filters?: { adminId?: string; professionalId?: string }): Promise<Billing[]> {
+      const where: Prisma.BillingWhereInput = { deletedAt: null };
+
+      if (filters?.professionalId) {
+        where.appointment = { professionalId: filters.professionalId, deletedAt: null };
+      } else if (filters?.adminId) {
+        where.appointment = {
+          deletedAt: null,
+          user: { OR: [{ id: filters.adminId }, { adminId: filters.adminId }] },
+        };
+      }
+
       return prisma.billing.findMany({
-        where: { deletedAt: null },
+        where,
         include: {
           appointment: {
             include: { patient: true, professional: true },
