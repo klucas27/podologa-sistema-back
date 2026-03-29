@@ -89,6 +89,17 @@ export const errorHandler = (
     return;
   }
 
+  // ── CSRF token errors (csrf-csrf library) ───────
+  if (err.message === "invalid csrf token" || err.message === "misconfigured csrf") {
+    logger.warn({ correlationId, path: req.path }, `CSRF error: ${err.message}`);
+    res.status(403).json({
+      status: "error",
+      message: "Token CSRF inválido. Recarregue a página e tente novamente.",
+      ...(correlationId ? { correlationId } : {}),
+    });
+    return;
+  }
+
   // ── Erro genérico (não-operacional) ────────────
   logger.error({ err, correlationId, path: req.path }, "Unhandled error");
 

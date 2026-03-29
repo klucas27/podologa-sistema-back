@@ -25,9 +25,11 @@ export function createAuthController(service: AuthService, envConfig: Env) {
     path: "/api/auth",
   };
 
-  function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
+  function setAuthCookies(req: Request, res: Response, accessToken: string, refreshToken: string): void {
     res.cookie("access_token", accessToken, ACCESS_COOKIE_OPTIONS);
     res.cookie("refresh_token", refreshToken, REFRESH_COOKIE_OPTIONS);
+    // Sync req.signedCookies so generateCsrfToken binds to the new access_token
+    req.signedCookies = { ...req.signedCookies, access_token: accessToken };
   }
 
   function clearAuthCookies(res: Response): void {
@@ -44,7 +46,7 @@ export function createAuthController(service: AuthService, envConfig: Env) {
       try {
         const { username, password } = req.body as { username: string; password: string };
         const result = await service.login(username, password);
-        setAuthCookies(res, result.tokens.accessToken, result.tokens.refreshToken);
+        setAuthCookies(req, res, result.tokens.accessToken, result.tokens.refreshToken);
         const csrfToken = generateCsrfToken(req, res);
         res.status(200).json({ status: "ok", data: { user: sanitizeOutput(result.user), csrfToken } });
       } catch (err) { next(err); }
@@ -56,7 +58,7 @@ export function createAuthController(service: AuthService, envConfig: Env) {
           username: string; password: string; professionalName?: string | null;
         };
         const result = await service.register(username, password, professionalName ?? null);
-        setAuthCookies(res, result.tokens.accessToken, result.tokens.refreshToken);
+        setAuthCookies(req, res, result.tokens.accessToken, result.tokens.refreshToken);
         const csrfToken = generateCsrfToken(req, res);
         res.status(201).json({ status: "ok", data: { user: sanitizeOutput(result.user), csrfToken } });
       } catch (err) { next(err); }
@@ -70,7 +72,7 @@ export function createAuthController(service: AuthService, envConfig: Env) {
           return;
         }
         const tokens = await service.rotateRefreshToken(oldRefreshToken);
-        setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
+        setAuthCookies(req, res, tokens.accessToken, tokens.refreshToken);
         const csrfToken = generateCsrfToken(req, res);
         res.status(200).json({ status: "ok", data: { csrfToken } });
       } catch (err) {

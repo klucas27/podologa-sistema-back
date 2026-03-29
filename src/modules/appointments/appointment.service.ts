@@ -3,6 +3,12 @@ import type { Appointment, AppointmentStatus } from "@prisma/client";
 import type { AppointmentRepository } from "./appointment.repository";
 import { NotFoundError, ConflictError, AppError } from "../../shared/errors";
 
+/** Converte string/Date em Date ao meio-dia UTC — evita troca de dia por fuso em colunas DATE. */
+function toDateOnly(value: string | Date): Date {
+  const iso = typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10);
+  return new Date(`${iso}T12:00:00Z`);
+}
+
 export interface CreateAppointmentInput {
   patientId: string;
   userId: string;
@@ -63,7 +69,7 @@ export function createAppointmentService(repo: AppointmentRepository) {
         professionalId: data.professionalId ?? null,
         scheduledStart: start,
         scheduledEnd: end,
-        scheduledDate: new Date(data.scheduledDate),
+        scheduledDate: toDateOnly(data.scheduledDate),
         status: data.status ?? "scheduled",
         notes: data.notes ?? null,
       });
@@ -88,7 +94,7 @@ export function createAppointmentService(repo: AppointmentRepository) {
       const updateData: Record<string, unknown> = {};
       if (data.scheduledStart) updateData["scheduledStart"] = new Date(data.scheduledStart);
       if (data.scheduledEnd) updateData["scheduledEnd"] = new Date(data.scheduledEnd);
-      if (data.scheduledDate) updateData["scheduledDate"] = new Date(data.scheduledDate);
+      if (data.scheduledDate) updateData["scheduledDate"] = toDateOnly(data.scheduledDate);
       if (data.notes !== undefined) updateData["notes"] = data.notes;
       if (data.professionalId !== undefined) updateData["professionalId"] = data.professionalId;
 
@@ -101,7 +107,7 @@ export function createAppointmentService(repo: AppointmentRepository) {
           updateData["status"] = "in_progress";
           updateData["actualStartTime"] = now;
           updateData["scheduledStart"] = now;
-          updateData["scheduledDate"] = now;
+          updateData["scheduledDate"] = toDateOnly(now);
         } else if (data.status === "completed") {
           if (existing.status !== "in_progress") {
             throw new AppError("Apenas consultas 'Em Atendimento' podem ser finalizadas", 400);
