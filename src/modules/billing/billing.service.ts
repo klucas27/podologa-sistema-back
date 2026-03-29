@@ -36,13 +36,20 @@ export function createBillingService(repo: BillingRepository) {
     },
 
     create(data: CreateBillingInput): Promise<Billing> {
+      const status = data.status ?? "pending";
+      const paidAt = data.paidAt
+        ? new Date(data.paidAt)
+        : status === "paid"
+          ? new Date()
+          : null;
+
       return repo.create({
         id: crypto.randomUUID(),
         appointmentId: data.appointmentId,
         amount: new Decimal(data.amount),
         paymentMethod: data.paymentMethod,
-        status: data.status ?? "pending",
-        paidAt: data.paidAt ? new Date(data.paidAt) : null,
+        status,
+        paidAt,
       });
     },
 
@@ -54,7 +61,11 @@ export function createBillingService(repo: BillingRepository) {
       if (data.amount !== undefined) updateData["amount"] = new Decimal(data.amount);
       if (data.paymentMethod) updateData["paymentMethod"] = data.paymentMethod;
       if (data.status) updateData["status"] = data.status;
-      if (data.paidAt !== undefined) updateData["paidAt"] = data.paidAt ? new Date(data.paidAt) : null;
+      if (data.paidAt !== undefined) {
+        updateData["paidAt"] = data.paidAt ? new Date(data.paidAt) : null;
+      } else if (data.status === "paid" && !existing.paidAt) {
+        updateData["paidAt"] = new Date();
+      }
 
       return repo.update(id, updateData);
     },
