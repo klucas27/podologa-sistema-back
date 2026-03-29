@@ -148,7 +148,7 @@ const buildPatientsChart = async (period: PeriodType): Promise<ChartDataPoint[]>
 const buildRevenueChart = async (period: PeriodType): Promise<ChartDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
   const billings = await prisma.billing.findMany({
-    where: { deletedAt: null, status: "paid", paidAt: { gte: start, lte: end } },
+    where: { deletedAt: null, status: "paid", paidAt: { not: null, gte: start, lte: end } },
     select: { paidAt: true, amount: true },
   });
   return aggregateByPeriod(billings, period, (b) => b.paidAt!, (b) => b.amount.toNumber());
