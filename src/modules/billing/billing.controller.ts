@@ -22,9 +22,9 @@ export function createBillingController(service: BillingService) {
       } catch (err) { next(err); }
     },
 
-    async listAll(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    async listAll(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const billings = await service.listAll();
+        const billings = await service.listAll(req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(billings) });
       } catch (err) { next(err); }
     },

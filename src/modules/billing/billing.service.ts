@@ -3,6 +3,7 @@ import type { Billing, PaymentMethod, BillingStatus } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import type { BillingRepository } from "./billing.repository";
 import { NotFoundError } from "../../shared/errors";
+import { nowSP, toDate } from "../../shared/utils/date";
 
 export interface CreateBillingInput {
   appointmentId: string;
@@ -31,16 +32,19 @@ export function createBillingService(repo: BillingRepository) {
       return repo.findByAppointment(appointmentId);
     },
 
-    listAll(): Promise<Billing[]> {
-      return repo.findAll();
+    listAll(ctx: { role: "admin" | "professional"; professionalId: string | null; adminId: string }): Promise<Billing[]> {
+      if (ctx.role === "professional" && ctx.professionalId) {
+        return repo.findAllForProfessional(ctx.professionalId);
+      }
+      return repo.findAll(ctx.adminId);
     },
 
     create(data: CreateBillingInput): Promise<Billing> {
       const status = data.status ?? "pending";
       const paidAt = data.paidAt
-        ? new Date(data.paidAt)
+        ? toDate(data.paidAt)
         : status === "paid"
-          ? new Date()
+          ? nowSP()
           : null;
 
       return repo.create({
@@ -62,9 +66,9 @@ export function createBillingService(repo: BillingRepository) {
       if (data.paymentMethod) updateData["paymentMethod"] = data.paymentMethod;
       if (data.status) updateData["status"] = data.status;
       if (data.paidAt !== undefined) {
-        updateData["paidAt"] = data.paidAt ? new Date(data.paidAt) : null;
+        updateData["paidAt"] = data.paidAt ? toDate(data.paidAt) : null;
       } else if (data.status === "paid" && !existing.paidAt) {
-        updateData["paidAt"] = new Date();
+        updateData["paidAt"] = nowSP();
       }
 
       return repo.update(id, updateData);

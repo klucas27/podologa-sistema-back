@@ -1,4 +1,5 @@
 import type { PrismaClient, Appointment, Prisma } from "@prisma/client";
+import { nowSP } from "../../shared/utils/date";
 
 export function createAppointmentRepository(prisma: PrismaClient) {
   return {
@@ -15,12 +16,13 @@ export function createAppointmentRepository(prisma: PrismaClient) {
       });
     },
 
-    findConflicting(start: Date, end: Date, excludeId?: string) {
+    findConflicting(start: Date, end: Date, excludeId?: string, professionalId?: string | null) {
       return prisma.appointment.findFirst({
         where: {
           deletedAt: null,
           status: { notIn: ["cancelled"] },
           ...(excludeId ? { id: { not: excludeId } } : {}),
+          ...(professionalId ? { professionalId } : {}),
           scheduledStart: { lt: end },
           scheduledEnd: { gt: start },
         },
@@ -28,9 +30,26 @@ export function createAppointmentRepository(prisma: PrismaClient) {
       });
     },
 
-    findMany(): Promise<Appointment[]> {
+    findMany(adminId: string): Promise<Appointment[]> {
       return prisma.appointment.findMany({
-        where: { deletedAt: null },
+        where: { deletedAt: null, patient: { adminId } },
+        include: {
+          patient: {
+            include: {
+              _count: { select: { anamneses: true } },
+              anamneses: { where: { deletedAt: null }, take: 1, orderBy: { createdAt: "desc" } },
+            },
+          },
+          user: true,
+          professional: true,
+        },
+        orderBy: { scheduledDate: "desc" },
+      });
+    },
+
+    findManyForProfessional(professionalId: string): Promise<Appointment[]> {
+      return prisma.appointment.findMany({
+        where: { deletedAt: null, professionalId },
         include: {
           patient: {
             include: {
@@ -76,7 +95,7 @@ export function createAppointmentRepository(prisma: PrismaClient) {
     softDelete(id: string): Promise<Appointment> {
       return prisma.appointment.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: { deletedAt: nowSP() },
       });
     },
   };

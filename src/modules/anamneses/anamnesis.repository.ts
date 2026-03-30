@@ -1,4 +1,5 @@
 import type { PrismaClient, Anamnesis, Prisma } from "@prisma/client";
+import { nowSP } from "../../shared/utils/date";
 
 export function createAnamnesisRepository(prisma: PrismaClient) {
   return {
@@ -24,7 +25,7 @@ export function createAnamnesisRepository(prisma: PrismaClient) {
     softDelete(id: string): Promise<Anamnesis> {
       return prisma.anamnesis.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: { deletedAt: nowSP() },
       });
     },
   };

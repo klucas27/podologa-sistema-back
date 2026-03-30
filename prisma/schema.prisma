@@ -16,6 +16,7 @@ datasource db {
 
 model Patient {
     id            String        @id @db.VarChar(36)
+    adminId       String        @map("admin_id") @db.VarChar(36)
     createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(0)
     updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(0)
     fullName      String        @map("full_name") @db.VarChar(191)
@@ -32,9 +33,11 @@ model Patient {
     city          String?       @db.VarChar(100)
     state         String?       @db.Char(2)
 
-    appointments Appointment[]
-    anamneses    Anamnesis[]
+    appointments          Appointment[]
+    anamneses             Anamnesis[]
+    patientProfessionals  PatientProfessional[]
 
+    @@index([adminId], map: "idx_patient_admin")
     @@index([fullName], map: "idx_full_name")
     @@index([city, state], map: "idx_city_state")
     @@index([phoneNumber], map: "idx_phone")
@@ -58,6 +61,8 @@ model User {
     username         String    @unique(map: "uc_user_username") @db.VarChar(191)
     passwordHash     String    @map("password_hash") @db.VarChar(255)
     professionalName String?   @map("professional_name") @db.VarChar(200)
+    role             UserRole  @default(admin)
+    professionalId   String?   @unique @map("professional_id") @db.VarChar(36)
     workdayStart     String    @default("08:00") @map("workday_start") @db.VarChar(5)
     workdayEnd       String    @default("18:00") @map("workday_end") @db.VarChar(5)
     createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(0)
@@ -66,9 +71,17 @@ model User {
 
     appointments   Appointment[]
     refreshTokens  RefreshToken[]
+    professional   Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
     @@index([username], map: "idx_user_username")
     @@map("user")
+}
+
+enum UserRole {
+    admin
+    professional
+
+    @@map("user_role")
 }
 
 // ── Refresh Token ────────────────────────────
@@ -92,6 +105,7 @@ model RefreshToken {
 
 model Professional {
     id          String    @id @db.VarChar(36)
+    adminId     String    @map("admin_id") @db.VarChar(36)
     fullName    String    @map("full_name") @db.VarChar(200)
     specialty   String?   @db.VarChar(100)
     phoneNumber String?   @map("phone_number") @db.VarChar(20)
@@ -101,12 +115,30 @@ model Professional {
     updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamp(0)
     deletedAt   DateTime? @map("deleted_at") @db.Timestamp(0)
 
-    appointments Appointment[]
+    appointments          Appointment[]
+    user                  User?
+    patientProfessionals  PatientProfessional[]
 
+    @@index([adminId], map: "idx_professional_admin")
     @@index([fullName], map: "idx_professional_full_name")
     @@index([isActive], map: "idx_professional_is_active")
     @@index([deletedAt], map: "idx_professional_deleted_at")
     @@map("professional")
+}
+
+// ── Patient-Professional Access (pivot) ──────
+
+model PatientProfessional {
+    patientId      String @map("patient_id") @db.VarChar(36)
+    professionalId String @map("professional_id") @db.VarChar(36)
+    createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(0)
+
+    patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+    professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+    @@id([patientId, professionalId])
+    @@index([professionalId], map: "idx_patient_professional_prof")
+    @@map("patient_professional")
 }
 
 // ── Appointment ──────────────────────────────

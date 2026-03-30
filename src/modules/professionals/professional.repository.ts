@@ -1,13 +1,18 @@
 import type { PrismaClient, Professional, Prisma } from "@prisma/client";
+import { nowSP } from "../../shared/utils/date";
 
 export function createProfessionalRepository(prisma: PrismaClient) {
   return {
-    findById(id: string): Promise<Professional | null> {
-      return prisma.professional.findFirst({ where: { id, deletedAt: null } });
+    findById(id: string, adminId: string): Promise<Professional | null> {
+      return prisma.professional.findFirst({ where: { id, adminId, deletedAt: null } });
     },
 
-    findMany(search?: string): Promise<Professional[]> {
-      const where: Prisma.ProfessionalWhereInput = { deletedAt: null };
+    findUserByUsername(username: string) {
+      return prisma.user.findUnique({ where: { username } });
+    },
+
+    findMany(adminId: string, search?: string): Promise<Professional[]> {
+      const where: Prisma.ProfessionalWhereInput = { adminId, deletedAt: null };
 
       if (search) {
         where.OR = [
@@ -22,15 +27,32 @@ export function createProfessionalRepository(prisma: PrismaClient) {
       });
     },
 
-    findActive(): Promise<Professional[]> {
+    findActive(adminId: string): Promise<Professional[]> {
       return prisma.professional.findMany({
-        where: { deletedAt: null, isActive: true },
+        where: { adminId, deletedAt: null, isActive: true },
         orderBy: { fullName: "asc" },
       });
     },
 
     create(data: Prisma.ProfessionalUncheckedCreateInput): Promise<Professional> {
       return prisma.professional.create({ data });
+    },
+
+    createWithUser(
+      profData: Prisma.ProfessionalUncheckedCreateInput,
+      userData: { id: string; username: string; passwordHash: string; professionalName: string | null },
+    ): Promise<Professional> {
+      return prisma.$transaction(async (tx) => {
+        const professional = await tx.professional.create({ data: profData });
+        await tx.user.create({
+          data: {
+            ...userData,
+            role: "professional",
+            professionalId: professional.id,
+          },
+        });
+        return professional;
+      });
     },
 
     update(id: string, data: Prisma.ProfessionalUncheckedUpdateInput): Promise<Professional> {
@@ -40,7 +62,7 @@ export function createProfessionalRepository(prisma: PrismaClient) {
     softDelete(id: string): Promise<Professional> {
       return prisma.professional.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: { deletedAt: nowSP() },
       });
     },
   };

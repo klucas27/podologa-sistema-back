@@ -3,6 +3,7 @@ import { prisma } from "../infra";
 import { env } from "../config";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { doubleCsrfProtection } from "../middlewares/csrf.middleware";
+import { checkRole } from "../middlewares/rbac.middleware";
 
 // ── Health ────────────────────────────────────────
 import { healthRouter } from "./health/health.routes";
@@ -64,6 +65,9 @@ import { createProfessionalRoutes } from "./professionals/professional.routes";
 // ── Dashboard ─────────────────────────────────────
 import { createDashboardController } from "./dashboard/dashboard.controller";
 import { createDashboardRoutes } from "./dashboard/dashboard.routes";
+
+// ── Patient Professionals ─────────────────────────
+import { createPatientProfessionalRepository, createPatientProfessionalService, createPatientProfessionalRoutes } from "./patient-professionals";
 
 // ═══════════════════════════════════════════════════
 // Wiring: Repository → Service → Controller → Routes
@@ -127,6 +131,11 @@ const professionalRoutes = createProfessionalRoutes(professionalCtrl);
 const dashboardCtrl = createDashboardController();
 const dashboardRoutes = createDashboardRoutes(dashboardCtrl);
 
+// Patient Professionals
+const patientProfessionalRepo = createPatientProfessionalRepository(prisma);
+const patientProfessionalService = createPatientProfessionalService({ patientProfessionalRepo });
+const patientProfessionalRoutes = createPatientProfessionalRoutes(patientProfessionalService);
+
 // ═══════════════════════════════════════════════════
 // Mount all routes on main router
 // ═══════════════════════════════════════════════════
@@ -141,6 +150,7 @@ router.use(authMiddleware);
 router.use(doubleCsrfProtection);
 
 router.use("/patients", patientRoutes);
+router.use("/patients/:patientId/professionals", checkRole("admin"), patientProfessionalRoutes);
 router.use("/appointments", appointmentRoutes);
 router.use("/clinical-evolutions", clinicalEvolutionRoutes);
 router.use("/pathologies", pathologyRoutes);
@@ -148,6 +158,6 @@ router.use("/evolution-pathologies", evolutionPathologyRoutes);
 router.use("/billings", billingRoutes);
 router.use("/anamneses", anamnesisRoutes);
 router.use("/professionals", professionalRoutes);
-router.use("/dashboard", dashboardRoutes);
+router.use("/dashboard", checkRole("admin"), dashboardRoutes);
 
 export { router };

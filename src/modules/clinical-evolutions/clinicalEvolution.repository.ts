@@ -1,4 +1,5 @@
 import type { PrismaClient, ClinicalEvolution, Prisma } from "@prisma/client";
+import { nowSP } from "../../shared/utils/date";
 
 export function createClinicalEvolutionRepository(prisma: PrismaClient) {
   return {
@@ -28,7 +29,7 @@ export function createClinicalEvolutionRepository(prisma: PrismaClient) {
     softDelete(id: string): Promise<ClinicalEvolution> {
       return prisma.clinicalEvolution.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: { deletedAt: nowSP() },
       });
     },
   };

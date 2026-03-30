@@ -13,8 +13,8 @@ export function checkRole(...allowed: string[]): RequestHandler {
       meta: { allowed },
     });
 
-    const roles = req.user?.roles ?? [];
-    const granted = roles.some((r) => allowed.includes(r));
+    const role = req.user?.role ?? "";
+    const granted = allowed.includes(role);
 
     if (!granted) {
       logRbacDenied(userId, req.originalUrl, req.method);

@@ -2,6 +2,7 @@ import crypto from "crypto";
 import type { Patient, MaritalStatus } from "@prisma/client";
 import type { PatientRepository } from "./patient.repository";
 import { NotFoundError } from "../../shared/errors";
+import { toDateOnly } from "../../shared/utils/date";
 
 export interface CreatePatientInput {
   fullName: string;
@@ -21,23 +22,40 @@ export interface CreatePatientInput {
 
 export type UpdatePatientInput = Partial<CreatePatientInput>;
 
+interface UserContext {
+  userId: string;
+  role: "admin" | "professional";
+  professionalId: string | null;
+  adminId: string;
+}
+
 export function createPatientService(repo: PatientRepository) {
+  async function findPatient(id: string, ctx: UserContext): Promise<Patient> {
+    const patient = ctx.role === "professional" && ctx.professionalId
+      ? await repo.findByIdForProfessional(id, ctx.professionalId)
+      : await repo.findById(id, ctx.adminId);
+    if (!patient) throw new NotFoundError("Paciente não encontrado");
+    return patient;
+  }
+
   return {
-    async getById(id: string): Promise<Patient> {
-      const patient = await repo.findById(id);
-      if (!patient) throw new NotFoundError("Paciente não encontrado");
-      return patient;
+    async getById(id: string, ctx: UserContext): Promise<Patient> {
+      return findPatient(id, ctx);
     },
 
-    list(search?: string) {
-      return repo.findMany(search);
+    list(ctx: UserContext, search?: string) {
+      if (ctx.role === "professional" && ctx.professionalId) {
+        return repo.findManyForProfessional(ctx.professionalId, search);
+      }
+      return repo.findMany(ctx.adminId, search);
     },
 
-    create(data: CreatePatientInput) {
+    create(data: CreatePatientInput, ctx: UserContext) {
       return repo.create({
         id: crypto.randomUUID(),
+        adminId: ctx.adminId,
         fullName: data.fullName,
-        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+        dateOfBirth: data.dateOfBirth ? toDateOnly(data.dateOfBirth) : null,
         maritalStatus: data.maritalStatus ?? "other",
         occupation: data.occupation ?? null,
         cpf: data.cpf,
@@ -52,27 +70,24 @@ export function createPatientService(repo: PatientRepository) {
       });
     },
 
-    async update(id: string, data: UpdatePatientInput) {
-      const existing = await repo.findById(id);
-      if (!existing) throw new NotFoundError("Paciente não encontrado");
+    async update(id: string, data: UpdatePatientInput, ctx: UserContext) {
+      await findPatient(id, ctx);
 
       return repo.update(id, {
         ...data,
         dateOfBirth: data.dateOfBirth !== undefined
-          ? (data.dateOfBirth ? new Date(data.dateOfBirth) : null)
+          ? (data.dateOfBirth ? toDateOnly(data.dateOfBirth) : null)
           : undefined,
       });
     },
 
-    async delete(id: string): Promise<void> {
-      const existing = await repo.findById(id);
-      if (!existing) throw new NotFoundError("Paciente não encontrado");
+    async delete(id: string, ctx: UserContext): Promise<void> {
+      await findPatient(id, ctx);
       await repo.delete(id);
     },
 
-    async forceDelete(id: string): Promise<void> {
-      const existing = await repo.findById(id);
-      if (!existing) throw new NotFoundError("Paciente não encontrado");
+    async forceDelete(id: string, ctx: UserContext): Promise<void> {
+      await findPatient(id, ctx);
       await repo.forceDeleteCascade(id);
     },
   };

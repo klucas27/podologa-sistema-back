@@ -36,9 +36,9 @@ export function createAppointmentController(service: AppointmentService) {
       } catch (err) { next(err); }
     },
 
-    async list(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    async list(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const appointments = await service.list();
+        const appointments = await service.list(req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(normalizeAppointments(appointments)) });
       } catch (err) { next(err); }
     },
@@ -56,7 +56,7 @@ export function createAppointmentController(service: AppointmentService) {
         const appointment = await service.create({
           ...req.body,
           userId: req.user!.userId,
-        });
+        }, req.user!);
         res.status(201).json({ status: "ok", data: sanitizeOutput(normalizeAppointments(appointment)) });
       } catch (err) { next(err); }
     },

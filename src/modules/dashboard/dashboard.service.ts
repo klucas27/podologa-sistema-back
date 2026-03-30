@@ -1,4 +1,17 @@
 import { prisma } from "../../infra";
+import {
+  nowSP,
+  startOfDaySP,
+  endOfDaySP,
+  startOfWeekSP,
+  startOfMonthSP,
+  startOfYearSP,
+  formatTimeSP,
+  getHourInSP,
+  getDayOfWeekInSP,
+  getDayInSP,
+  getMonthInSP,
+} from "../../shared/utils/date";
 
 export type KpiType = "appointments" | "patients" | "revenue" | "alerts";
 export type PeriodType = "daily" | "weekly" | "monthly" | "annual";
@@ -65,31 +78,25 @@ export interface DashboardData {
 const DAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-const startOfDay = (date: Date): Date => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; };
-const endOfDay = (date: Date): Date => { const d = new Date(date); d.setHours(23, 59, 59, 999); return d; };
-const startOfWeek = (date: Date): Date => { const d = new Date(date); d.setDate(d.getDate() - d.getDay()); d.setHours(0, 0, 0, 0); return d; };
-const startOfMonth = (date: Date): Date => { const d = new Date(date); d.setDate(1); d.setHours(0, 0, 0, 0); return d; };
-const startOfYear = (date: Date): Date => { const d = new Date(date); d.setMonth(0, 1); d.setHours(0, 0, 0, 0); return d; };
-
 interface PeriodRange { start: Date; end: Date; }
 
 const getPeriodRange = (period: PeriodType): PeriodRange => {
-  const now = new Date();
+  const now = nowSP();
   switch (period) {
-    case "daily": return { start: startOfDay(now), end: endOfDay(now) };
-    case "weekly": return { start: startOfWeek(now), end: endOfDay(now) };
-    case "monthly": return { start: startOfMonth(now), end: endOfDay(now) };
-    case "annual": return { start: startOfYear(now), end: endOfDay(now) };
+    case "daily": return { start: startOfDaySP(now), end: endOfDaySP(now) };
+    case "weekly": return { start: startOfWeekSP(now), end: endOfDaySP(now) };
+    case "monthly": return { start: startOfMonthSP(now), end: endOfDaySP(now) };
+    case "annual": return { start: startOfYearSP(now), end: endOfDaySP(now) };
   }
 };
 
 const getPreviousPeriodRange = (period: PeriodType): PeriodRange => {
   const current = getPeriodRange(period);
   switch (period) {
-    case "daily": { const s = new Date(current.start); s.setDate(s.getDate() - 1); const e = new Date(current.end); e.setDate(e.getDate() - 1); return { start: s, end: e }; }
-    case "weekly": { const s = new Date(current.start); s.setDate(s.getDate() - 7); const e = new Date(current.start); e.setMilliseconds(-1); return { start: s, end: e }; }
-    case "monthly": { const s = new Date(current.start); s.setMonth(s.getMonth() - 1); const e = new Date(current.start); e.setMilliseconds(-1); return { start: s, end: e }; }
-    case "annual": { const s = new Date(current.start); s.setFullYear(s.getFullYear() - 1); const e = new Date(current.start); e.setMilliseconds(-1); return { start: s, end: e }; }
+    case "daily": { const s = new Date(current.start.getTime() - 24 * 60 * 60 * 1000); return { start: startOfDaySP(s), end: endOfDaySP(s) }; }
+    case "weekly": { const s = new Date(current.start.getTime() - 7 * 24 * 60 * 60 * 1000); const e = new Date(current.start.getTime() - 1); return { start: startOfDaySP(s), end: e }; }
+    case "monthly": { const s = new Date(current.start); s.setMonth(s.getMonth() - 1); const e = new Date(current.start.getTime() - 1); return { start: startOfMonthSP(s), end: e }; }
+    case "annual": { const s = new Date(current.start); s.setFullYear(s.getFullYear() - 1); const e = new Date(current.start.getTime() - 1); return { start: startOfYearSP(s), end: e }; }
   }
 };
 
@@ -106,58 +113,61 @@ function aggregateByPeriod<T>(
     for (let h = 7; h <= 19; h++) buckets.set(`${String(h).padStart(2, "0")}h`, 0);
     for (const item of items) {
       const d = getDate(item);
-      const hour = d.getHours();
+      const hour = getHourInSP(d);
       if (hour < 7 || hour > 19) continue;
       const key = `${String(hour).padStart(2, "0")}h`;
       buckets.set(key, (buckets.get(key) ?? 0) + (getValue?.(item) ?? 1));
     }
   } else if (period === "weekly") {
     const cursor = new Date(start);
-    while (cursor <= end) { buckets.set(DAY_LABELS[cursor.getDay()] ?? "", 0); cursor.setDate(cursor.getDate() + 1); }
-    for (const item of items) { const d = getDate(item); const key = DAY_LABELS[d.getDay()] ?? ""; buckets.set(key, (buckets.get(key) ?? 0) + (getValue?.(item) ?? 1)); }
+    while (cursor <= end) { buckets.set(DAY_LABELS[getDayOfWeekInSP(cursor)] ?? "", 0); cursor.setDate(cursor.getDate() + 1); }
+    for (const item of items) { const d = getDate(item); const key = DAY_LABELS[getDayOfWeekInSP(d)] ?? ""; buckets.set(key, (buckets.get(key) ?? 0) + (getValue?.(item) ?? 1)); }
   } else if (period === "monthly") {
-    const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+    const tempDate = new Date(start);
+    tempDate.setMonth(tempDate.getMonth() + 1);
+    tempDate.setDate(0);
+    const daysInMonth = tempDate.getDate();
     for (let d = 1; d <= daysInMonth; d++) buckets.set(String(d), 0);
-    for (const item of items) { const d = getDate(item); const key = String(d.getDate()); buckets.set(key, (buckets.get(key) ?? 0) + (getValue?.(item) ?? 1)); }
+    for (const item of items) { const d = getDate(item); const key = String(getDayInSP(d)); buckets.set(key, (buckets.get(key) ?? 0) + (getValue?.(item) ?? 1)); }
   } else {
     for (let m = 0; m < 12; m++) buckets.set(MONTH_LABELS[m]!, 0);
-    for (const item of items) { const d = getDate(item); const key = MONTH_LABELS[d.getMonth()]!; buckets.set(key, (buckets.get(key) ?? 0) + (getValue?.(item) ?? 1)); }
+    for (const item of items) { const d = getDate(item); const key = MONTH_LABELS[getMonthInSP(d)]!; buckets.set(key, (buckets.get(key) ?? 0) + (getValue?.(item) ?? 1)); }
   }
 
   return Array.from(buckets, ([label, value]) => ({ label, value }));
 }
 
-const buildAppointmentsChart = async (period: PeriodType): Promise<ChartDataPoint[]> => {
+const buildAppointmentsChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
   const appointments = await prisma.appointment.findMany({
-    where: { deletedAt: null, scheduledDate: { gte: start, lte: end }, status: { not: "cancelled" } },
+    where: { deletedAt: null, scheduledDate: { gte: start, lte: end }, status: { not: "cancelled" }, patient: { adminId } },
     select: { scheduledDate: true, scheduledStart: true },
   });
   return aggregateByPeriod(appointments, period, (a) => period === "daily" ? a.scheduledStart : a.scheduledDate);
 };
 
-const buildPatientsChart = async (period: PeriodType): Promise<ChartDataPoint[]> => {
+const buildPatientsChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
   const patients = await prisma.patient.findMany({
-    where: { createdAt: { gte: start, lte: end } },
+    where: { adminId, createdAt: { gte: start, lte: end } },
     select: { createdAt: true },
   });
   return aggregateByPeriod(patients, period, (p) => p.createdAt);
 };
 
-const buildRevenueChart = async (period: PeriodType): Promise<ChartDataPoint[]> => {
+const buildRevenueChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
   const billings = await prisma.billing.findMany({
-    where: { deletedAt: null, status: "paid", paidAt: { not: null, gte: start, lte: end } },
+    where: { deletedAt: null, status: "paid", paidAt: { not: null, gte: start, lte: end }, appointment: { patient: { adminId } } },
     select: { paidAt: true, amount: true },
   });
   return aggregateByPeriod(billings, period, (b) => b.paidAt!, (b) => b.amount.toNumber());
 };
 
-const buildAlertsChart = async (period: PeriodType): Promise<ChartDataPoint[]> => {
+const buildAlertsChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
   const evolutions = await prisma.clinicalEvolution.findMany({
-    where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed" } },
+    where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed", patient: { adminId } } },
     select: { recommendedReturnDays: true, createdAt: true },
   });
   const alertsInPeriod = evolutions.filter((evo) => {
@@ -174,11 +184,11 @@ const buildAlertsChart = async (period: PeriodType): Promise<ChartDataPoint[]> =
   return aggregateByPeriod(records, period, (r) => r.date);
 };
 
-const getReturnAlertsList = async (): Promise<ReturnAlertItem[]> => {
-  const now = new Date();
-  const todayEnd = endOfDay(now);
+const getReturnAlertsList = async (adminId: string): Promise<ReturnAlertItem[]> => {
+  const now = nowSP();
+  const todayEnd = endOfDaySP(now);
   const evolutions = await prisma.clinicalEvolution.findMany({
-    where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed", patient: { fullName: { not: undefined } } } },
+    where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed", patient: { adminId, fullName: { not: undefined } } } },
     select: { id: true, recommendedReturnDays: true, createdAt: true, appointment: { select: { patient: { select: { fullName: true } } } } },
   });
   const alerts: ReturnAlertItem[] = [];
@@ -204,20 +214,21 @@ const computeMovingAverage = (data: ChartDataPoint[], window: number): ChartData
   });
 };
 
-const buildPreviousPeriodPatientsChart = async (period: PeriodType): Promise<ChartDataPoint[]> => {
+const buildPreviousPeriodPatientsChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPreviousPeriodRange(period);
-  const patients = await prisma.patient.findMany({ where: { createdAt: { gte: start, lte: end } }, select: { createdAt: true } });
+  const patients = await prisma.patient.findMany({ where: { adminId, createdAt: { gte: start, lte: end } }, select: { createdAt: true } });
   return aggregateByPeriod(patients, period, (p) => p.createdAt);
 };
 
-const buildWaterfallData = async (period: PeriodType): Promise<WaterfallDataPoint[]> => {
+const buildWaterfallData = async (period: PeriodType, adminId: string): Promise<WaterfallDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
+  const billingWhere = { deletedAt: null, createdAt: { gte: start, lte: end }, appointment: { patient: { adminId } } };
   const [totalAgg, paidAgg, cancelledAgg, refundedAgg, pendingAgg] = await Promise.all([
-    prisma.billing.aggregate({ where: { deletedAt: null, createdAt: { gte: start, lte: end } }, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { deletedAt: null, status: "paid", createdAt: { gte: start, lte: end } }, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { deletedAt: null, status: "cancelled", createdAt: { gte: start, lte: end } }, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { deletedAt: null, status: "refunded", createdAt: { gte: start, lte: end } }, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { deletedAt: null, status: "pending", createdAt: { gte: start, lte: end } }, _sum: { amount: true } }),
+    prisma.billing.aggregate({ where: billingWhere, _sum: { amount: true } }),
+    prisma.billing.aggregate({ where: { ...billingWhere, status: "paid" }, _sum: { amount: true } }),
+    prisma.billing.aggregate({ where: { ...billingWhere, status: "cancelled" }, _sum: { amount: true } }),
+    prisma.billing.aggregate({ where: { ...billingWhere, status: "refunded" }, _sum: { amount: true } }),
+    prisma.billing.aggregate({ where: { ...billingWhere, status: "pending" }, _sum: { amount: true } }),
   ]);
   const total = totalAgg._sum.amount?.toNumber() ?? 0;
   const paid = paidAgg._sum.amount?.toNumber() ?? 0;
@@ -241,10 +252,10 @@ const OVERDUE_CATEGORIES = [
   { key: "30+d", min: 31, max: Infinity },
 ];
 
-const buildHeatmapData = async (): Promise<HeatmapDataPoint[]> => {
-  const now = new Date();
+const buildHeatmapData = async (adminId: string): Promise<HeatmapDataPoint[]> => {
+  const now = nowSP();
   const evolutions = await prisma.clinicalEvolution.findMany({
-    where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed" } },
+    where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed", patient: { adminId } } },
     select: { recommendedReturnDays: true, createdAt: true },
   });
   const buckets = new Map<string, number>();
@@ -255,7 +266,7 @@ const buildHeatmapData = async (): Promise<HeatmapDataPoint[]> => {
     if (returnDate > now) continue;
     const daysOverdue = Math.floor((now.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24));
     if (daysOverdue < 1) continue;
-    const dayOfWeek = DAY_LABELS[returnDate.getDay()] ?? "";
+    const dayOfWeek = DAY_LABELS[getDayOfWeekInSP(returnDate)] ?? "";
     const category = OVERDUE_CATEGORIES.find((c) => daysOverdue >= c.min && daysOverdue <= c.max);
     if (!category) continue;
     const key = `${dayOfWeek}|${category.key}`;
@@ -274,18 +285,19 @@ const buildHeatmapData = async (): Promise<HeatmapDataPoint[]> => {
 export async function getDashboardData(
   kpi: KpiType = "appointments",
   period: PeriodType = "weekly",
+  adminId: string,
 ): Promise<DashboardData> {
-  const now = new Date();
-  const todayStart = startOfDay(now);
-  const todayEnd = endOfDay(now);
+  const now = nowSP();
+  const todayStart = startOfDaySP(now);
+  const todayEnd = endOfDaySP(now);
   const { start: currentStart, end: currentEnd } = getPeriodRange(period);
   const { start: prevStart, end: prevEnd } = getPreviousPeriodRange(period);
 
   const chartBuilders: Record<KpiType, () => Promise<ChartDataPoint[]>> = {
-    appointments: () => buildAppointmentsChart(period),
-    patients: () => buildPatientsChart(period),
-    revenue: () => buildRevenueChart(period),
-    alerts: () => buildAlertsChart(period),
+    appointments: () => buildAppointmentsChart(period, adminId),
+    patients: () => buildPatientsChart(period, adminId),
+    revenue: () => buildRevenueChart(period, adminId),
+    alerts: () => buildAlertsChart(period, adminId),
   };
 
   const [
@@ -295,23 +307,23 @@ export async function getDashboardData(
     returnAlertEvolutions, todayAppointmentsList,
     chartData, returnAlerts,
   ] = await Promise.all([
-    prisma.appointment.count({ where: { deletedAt: null, scheduledDate: { gte: currentStart, lte: currentEnd }, status: { not: "cancelled" } } }),
-    prisma.appointment.count({ where: { deletedAt: null, scheduledDate: { gte: prevStart, lte: prevEnd }, status: { not: "cancelled" } } }),
-    prisma.patient.count({ where: { createdAt: { gte: currentStart, lte: currentEnd } } }),
-    prisma.patient.count({ where: { createdAt: { gte: prevStart, lte: prevEnd } } }),
-    prisma.billing.aggregate({ where: { deletedAt: null, status: "paid", paidAt: { gte: currentStart, lte: currentEnd } }, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { deletedAt: null, status: "paid", paidAt: { gte: prevStart, lte: prevEnd } }, _sum: { amount: true } }),
-    prisma.clinicalEvolution.findMany({ where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed" } }, select: { recommendedReturnDays: true, createdAt: true } }),
-    prisma.appointment.findMany({ where: { deletedAt: null, scheduledDate: { gte: todayStart, lte: todayEnd }, status: { not: "cancelled" } }, include: { patient: { select: { fullName: true } } }, orderBy: { scheduledStart: "asc" } }),
+    prisma.appointment.count({ where: { deletedAt: null, scheduledDate: { gte: currentStart, lte: currentEnd }, status: { not: "cancelled" }, patient: { adminId } } }),
+    prisma.appointment.count({ where: { deletedAt: null, scheduledDate: { gte: prevStart, lte: prevEnd }, status: { not: "cancelled" }, patient: { adminId } } }),
+    prisma.patient.count({ where: { adminId, createdAt: { gte: currentStart, lte: currentEnd } } }),
+    prisma.patient.count({ where: { adminId, createdAt: { gte: prevStart, lte: prevEnd } } }),
+    prisma.billing.aggregate({ where: { deletedAt: null, status: "paid", paidAt: { gte: currentStart, lte: currentEnd }, appointment: { patient: { adminId } } }, _sum: { amount: true } }),
+    prisma.billing.aggregate({ where: { deletedAt: null, status: "paid", paidAt: { gte: prevStart, lte: prevEnd }, appointment: { patient: { adminId } } }, _sum: { amount: true } }),
+    prisma.clinicalEvolution.findMany({ where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed", patient: { adminId } } }, select: { recommendedReturnDays: true, createdAt: true } }),
+    prisma.appointment.findMany({ where: { deletedAt: null, scheduledDate: { gte: todayStart, lte: todayEnd }, status: { not: "cancelled" }, patient: { adminId } }, include: { patient: { select: { fullName: true } } }, orderBy: { scheduledStart: "asc" } }),
     chartBuilders[kpi](),
-    getReturnAlertsList(),
+    getReturnAlertsList(adminId),
   ]);
 
   const movingAverageWindow = period === "daily" ? 3 : period === "monthly" ? 7 : 3;
   const movingAverage = kpi === "appointments" ? computeMovingAverage(chartData, movingAverageWindow) : [];
-  const previousPeriodData = kpi === "patients" ? await buildPreviousPeriodPatientsChart(period) : [];
-  const waterfallData = kpi === "revenue" ? await buildWaterfallData(period) : [];
-  const heatmapData = kpi === "alerts" ? await buildHeatmapData() : [];
+  const previousPeriodData = kpi === "patients" ? await buildPreviousPeriodPatientsChart(period, adminId) : [];
+  const waterfallData = kpi === "revenue" ? await buildWaterfallData(period, adminId) : [];
+  const heatmapData = kpi === "alerts" ? await buildHeatmapData(adminId) : [];
 
   let urgentCount = 0;
   let totalAlerts = 0;
@@ -329,7 +341,7 @@ export async function getDashboardData(
   const todayAppointments: DashboardAppointment[] = todayAppointmentsList.map((apt) => ({
     id: apt.id,
     patient: apt.patient.fullName,
-    time: apt.scheduledStart.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", hour12: false }),
+    time: formatTimeSP(apt.scheduledStart),
     procedure: apt.notes,
     status: apt.status,
   }));

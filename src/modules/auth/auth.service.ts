@@ -5,10 +5,14 @@ import crypto from "crypto";
 import type { AuthRepository } from "./auth.repository";
 import type { Env } from "../../config/env";
 import { AuthError, ConflictError } from "../../shared/errors";
+import { nowSP } from "../../shared/utils/date";
 
 interface TokenPayload {
   userId: string;
   username: string;
+  role: "admin" | "professional";
+  professionalId: string | null;
+  adminId: string;
 }
 
 interface AuthTokens {
@@ -22,6 +26,9 @@ export interface LoginResult {
     id: string;
     username: string;
     professionalName: string | null;
+    role: "admin" | "professional";
+    professionalId: string | null;
+    adminId: string;
   };
 }
 
@@ -44,7 +51,7 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
 
   async function persistRefreshToken(userId: string, rawToken: string): Promise<void> {
     const tokenHash = hashToken(rawToken);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(nowSP().getTime() + 7 * 24 * 60 * 60 * 1000);
     await repo.createRefreshToken({
       id: crypto.randomUUID(),
       userId,
@@ -68,9 +75,19 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
       const valid = await bcrypt.compare(password, user.passwordHash);
       if (!valid) throw new AuthError("Credenciais inválidas");
 
+      // Resolve adminId: admin owns their own data, professional inherits from their Professional record
+      let adminId = user.id;
+      if (user.role === "professional" && user.professionalId) {
+        const prof = await repo.findProfessionalAdminId(user.professionalId);
+        if (prof) adminId = prof.adminId;
+      }
+
       const tokens = await issueTokenPair({
         userId: user.id,
         username: user.username,
+        role: user.role,
+        professionalId: user.professionalId,
+        adminId,
       });
 
       return {
@@ -79,6 +96,9 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
           id: user.id,
           username: user.username,
           professionalName: user.professionalName,
+          role: user.role,
+          professionalId: user.professionalId,
+          adminId,
         },
       };
     },
@@ -102,6 +122,9 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
       const tokens = await issueTokenPair({
         userId: user.id,
         username: user.username,
+        role: user.role,
+        professionalId: user.professionalId,
+        adminId: user.id, // New users are always admin
       });
 
       return {
@@ -110,6 +133,9 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
           id: user.id,
           username: user.username,
           professionalName: user.professionalName,
+          role: user.role,
+          professionalId: user.professionalId,
+          adminId: user.id,
         },
       };
     },
@@ -130,12 +156,29 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
         throw new AuthError("Refresh token inválido ou expirado. Faça login novamente.");
       }
 
-      if (stored.expiresAt < new Date()) {
+      if (stored.expiresAt < nowSP()) {
         throw new AuthError("Refresh token expirado");
       }
 
       await repo.revokeRefreshToken(stored.id);
-      return issueTokenPair({ userId: payload.userId, username: payload.username });
+
+      // Fetch fresh user data for the new token pair
+      const user = await repo.findUserByIdFull(payload.userId);
+      if (!user || user.deletedAt) throw new AuthError("Usuário não encontrado");
+
+      let adminId = user.id;
+      if (user.role === "professional" && user.professionalId) {
+        const prof = await repo.findProfessionalAdminId(user.professionalId);
+        if (prof) adminId = prof.adminId;
+      }
+
+      return issueTokenPair({
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        professionalId: user.professionalId,
+        adminId,
+      });
     },
 
     async revokeRefreshToken(rawToken: string): Promise<void> {

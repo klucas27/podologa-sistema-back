@@ -21,7 +21,7 @@ export function createDashboardController() {
           ? (periodParam as PeriodType)
           : "weekly";
 
-        const data = await getDashboardData(kpi, period);
+        const data = await getDashboardData(kpi, period, req.user!.adminId);
         res.status(200).json({ status: "ok", data: sanitizeOutput(data) });
       } catch (err) { next(err); }
     },

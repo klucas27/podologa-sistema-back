@@ -2,12 +2,7 @@ import crypto from "crypto";
 import type { Appointment, AppointmentStatus } from "@prisma/client";
 import type { AppointmentRepository } from "./appointment.repository";
 import { NotFoundError, ConflictError, AppError } from "../../shared/errors";
-
-/** Converte string/Date em Date ao meio-dia UTC — evita troca de dia por fuso em colunas DATE. */
-function toDateOnly(value: string | Date): Date {
-  const iso = typeof value === "string" ? value.slice(0, 10) : value.toISOString().slice(0, 10);
-  return new Date(`${iso}T12:00:00Z`);
-}
+import { nowSP, toDateOnly, toDate, formatTimeSP } from "../../shared/utils/date";
 
 export interface CreateAppointmentInput {
   patientId: string;
@@ -29,12 +24,18 @@ export interface UpdateAppointmentInput {
   notes?: string | null;
 }
 
+interface UserContext {
+  role: "admin" | "professional";
+  professionalId: string | null;
+  adminId: string;
+}
+
 export function createAppointmentService(repo: AppointmentRepository) {
-  async function checkTimeConflict(start: Date, end: Date, excludeId?: string): Promise<void> {
-    const conflicting = await repo.findConflicting(start, end, excludeId);
+  async function checkTimeConflict(start: Date, end: Date, excludeId?: string, professionalId?: string | null): Promise<void> {
+    const conflicting = await repo.findConflicting(start, end, excludeId, professionalId);
     if (conflicting) {
-      const conflictStart = conflicting.scheduledStart.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-      const conflictEnd = conflicting.scheduledEnd.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+      const conflictStart = formatTimeSP(conflicting.scheduledStart);
+      const conflictEnd = formatTimeSP(conflicting.scheduledEnd);
       const patientName = conflicting.patient?.fullName ?? "Paciente";
       throw new ConflictError(
         `Conflito de horário: já existe uma consulta de ${patientName} das ${conflictStart} às ${conflictEnd}`,
@@ -49,24 +50,30 @@ export function createAppointmentService(repo: AppointmentRepository) {
       return appointment;
     },
 
-    list(): Promise<Appointment[]> {
-      return repo.findMany();
+    list(ctx: UserContext): Promise<Appointment[]> {
+      if (ctx.role === "professional" && ctx.professionalId) {
+        return repo.findManyForProfessional(ctx.professionalId);
+      }
+      return repo.findMany(ctx.adminId);
     },
 
     listByPatient(patientId: string): Promise<Appointment[]> {
       return repo.findByPatient(patientId);
     },
 
-    async create(data: CreateAppointmentInput): Promise<Appointment> {
-      const start = new Date(data.scheduledStart);
-      const end = new Date(data.scheduledEnd);
-      await checkTimeConflict(start, end);
+    async create(data: CreateAppointmentInput, ctx?: UserContext): Promise<Appointment> {
+      const start = toDate(data.scheduledStart);
+      const end = toDate(data.scheduledEnd);
+      const profId = ctx?.role === "professional" && ctx.professionalId
+        ? ctx.professionalId
+        : data.professionalId ?? null;
+      await checkTimeConflict(start, end, undefined, profId);
 
       return repo.create({
         id: crypto.randomUUID(),
         patientId: data.patientId,
         userId: data.userId,
-        professionalId: data.professionalId ?? null,
+        professionalId: profId,
         scheduledStart: start,
         scheduledEnd: end,
         scheduledDate: toDateOnly(data.scheduledDate),
@@ -86,14 +93,14 @@ export function createAppointmentService(repo: AppointmentRepository) {
       }
 
       if (data.scheduledStart || data.scheduledEnd) {
-        const newStart = data.scheduledStart ? new Date(data.scheduledStart) : existing.scheduledStart;
-        const newEnd = data.scheduledEnd ? new Date(data.scheduledEnd) : existing.scheduledEnd;
+        const newStart = data.scheduledStart ? toDate(data.scheduledStart) : existing.scheduledStart;
+        const newEnd = data.scheduledEnd ? toDate(data.scheduledEnd) : existing.scheduledEnd;
         await checkTimeConflict(newStart, newEnd, id);
       }
 
       const updateData: Record<string, unknown> = {};
-      if (data.scheduledStart) updateData["scheduledStart"] = new Date(data.scheduledStart);
-      if (data.scheduledEnd) updateData["scheduledEnd"] = new Date(data.scheduledEnd);
+      if (data.scheduledStart) updateData["scheduledStart"] = toDate(data.scheduledStart);
+      if (data.scheduledEnd) updateData["scheduledEnd"] = toDate(data.scheduledEnd);
       if (data.scheduledDate) updateData["scheduledDate"] = toDateOnly(data.scheduledDate);
       if (data.notes !== undefined) updateData["notes"] = data.notes;
       if (data.professionalId !== undefined) updateData["professionalId"] = data.professionalId;
@@ -103,7 +110,7 @@ export function createAppointmentService(repo: AppointmentRepository) {
           if (existing.status !== "scheduled" && existing.status !== "confirmed") {
             throw new AppError("Apenas consultas 'Agendada' ou 'Confirmada' podem ser iniciadas", 400);
           }
-          const now = new Date();
+          const now = nowSP();
           updateData["status"] = "in_progress";
           updateData["actualStartTime"] = now;
           updateData["scheduledStart"] = now;
@@ -112,10 +119,11 @@ export function createAppointmentService(repo: AppointmentRepository) {
           if (existing.status !== "in_progress") {
             throw new AppError("Apenas consultas 'Em Atendimento' podem ser finalizadas", 400);
           }
-          const now = new Date();
+          const now = nowSP();
           updateData["status"] = "completed";
           updateData["actualEndTime"] = now;
           updateData["scheduledEnd"] = now;
+          updateData["scheduledDate"] = toDateOnly(now);
         } else {
           updateData["status"] = data.status;
         }

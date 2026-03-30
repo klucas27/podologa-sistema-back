@@ -5,7 +5,9 @@ import { env } from "../config";
 interface JwtPayload {
   userId: string;
   username: string;
-  roles?: string[];
+  role?: "admin" | "professional";
+  professionalId?: string | null;
+  adminId?: string;
 }
 
 /**
@@ -41,7 +43,9 @@ export const authMiddleware = (
     req.user = {
       userId: decoded.userId,
       username: decoded.username,
-      roles: decoded.roles ?? [],
+      role: decoded.role ?? "admin",
+      professionalId: decoded.professionalId ?? null,
+      adminId: decoded.adminId ?? decoded.userId,
     };
 
     next();

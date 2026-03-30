@@ -1,4 +1,5 @@
 import type { PrismaClient, Billing, Prisma } from "@prisma/client";
+import { nowSP } from "../../shared/utils/date";
 
 export function createBillingRepository(prisma: PrismaClient) {
   return {
@@ -16,9 +17,27 @@ export function createBillingRepository(prisma: PrismaClient) {
       });
     },
 
-    findAll(): Promise<Billing[]> {
+    findAll(adminId: string): Promise<Billing[]> {
       return prisma.billing.findMany({
-        where: { deletedAt: null },
+        where: {
+          deletedAt: null,
+          appointment: { deletedAt: null, patient: { adminId } },
+        },
+        include: {
+          appointment: {
+            include: { patient: true, professional: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    },
+
+    findAllForProfessional(professionalId: string): Promise<Billing[]> {
+      return prisma.billing.findMany({
+        where: {
+          deletedAt: null,
+          appointment: { deletedAt: null, professionalId },
+        },
         include: {
           appointment: {
             include: { patient: true, professional: true },
@@ -39,7 +58,7 @@ export function createBillingRepository(prisma: PrismaClient) {
     softDelete(id: string): Promise<Billing> {
       return prisma.billing.update({
         where: { id },
-        data: { deletedAt: new Date() },
+        data: { deletedAt: nowSP() },
       });
     },
   };
