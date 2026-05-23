@@ -36,6 +36,7 @@ model Patient {
     appointments          Appointment[]
     anamneses             Anamnesis[]
     patientProfessionals  PatientProfessional[]
+    whatsappMessages      WhatsappMessage[]
 
     @@index([adminId], map: "idx_patient_admin")
     @@index([fullName], map: "idx_full_name")
@@ -340,4 +341,47 @@ enum PainSensitivity {
     none
 
     @@map("anamnesis_pain_sensitivity")
+}
+
+// ── WhatsApp ──────────────────────────────────
+
+enum MessageDirection {
+    inbound
+    outbound
+
+    @@map("whatsapp_message_direction")
+}
+
+enum MessageStatus {
+    sent
+    delivered
+    read
+    failed
+
+    @@map("whatsapp_message_status")
+}
+
+model WhatsappMessage {
+    id         String           @id @db.VarChar(36)
+    patientId  String?          @map("patient_id") @db.VarChar(36)
+    phone      String           @db.VarChar(20)
+    direction  MessageDirection
+    content    String           @db.Text
+    status     MessageStatus    @default(sent)
+    externalId String?          @unique @map("external_id") @db.VarChar(100)
+    createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamp(0)
+
+    patient Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+    @@index([phone], map: "idx_whatsapp_phone")
+    @@index([patientId], map: "idx_whatsapp_patient")
+    @@map("whatsapp_messages")
+}
+
+model WhatsappConversationState {
+    phone     String   @id @db.VarChar(20)
+    state     String   @db.VarChar(50)
+    updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
+
+    @@map("whatsapp_conversation_states")
 }

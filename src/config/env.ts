@@ -13,6 +13,10 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default("15m"),
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"),
   COOKIE_SECRET: z.string().min(1, "COOKIE_SECRET is required"),
+  WHATSAPP_ACCESS_TOKEN: z.string().default(""),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().default(""),
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().default(""),
+  WHATSAPP_APP_SECRET: z.string().default(""),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -62,6 +62,12 @@ import { createProfessionalService } from "./professionals/professional.service"
 import { createProfessionalController } from "./professionals/professional.controller";
 import { createProfessionalRoutes } from "./professionals/professional.routes";
 
+// ── WhatsApp ──────────────────────────────────────
+import { createWhatsappRepository } from "./whatsapp/whatsapp.repository";
+import { createWhatsappService } from "./whatsapp/whatsapp.service";
+import { createWhatsappController } from "./whatsapp/whatsapp.controller";
+import { createWhatsappPublicRoutes, createWhatsappPrivateRoutes } from "./whatsapp/whatsapp.routes";
+
 // ── Dashboard ─────────────────────────────────────
 import { createDashboardController } from "./dashboard/dashboard.controller";
 import { createDashboardRoutes } from "./dashboard/dashboard.routes";
@@ -127,6 +133,13 @@ const professionalService = createProfessionalService(professionalRepo);
 const professionalCtrl = createProfessionalController(professionalService);
 const professionalRoutes = createProfessionalRoutes(professionalCtrl);
 
+// WhatsApp
+const whatsappRepo = createWhatsappRepository(prisma);
+const whatsappService = createWhatsappService(whatsappRepo, env);
+const whatsappCtrl = createWhatsappController(whatsappService, env);
+const whatsappPublicRoutes = createWhatsappPublicRoutes(whatsappCtrl);
+const whatsappPrivateRoutes = createWhatsappPrivateRoutes(whatsappCtrl);
+
 // Dashboard
 const dashboardCtrl = createDashboardController();
 const dashboardRoutes = createDashboardRoutes(dashboardCtrl);
@@ -144,6 +157,7 @@ const router = Router();
 // Public routes
 router.use("/health", healthRouter);
 router.use("/auth", authRoutes);
+router.use("/whatsapp", whatsappPublicRoutes);
 
 // Authenticated + CSRF protected routes
 router.use(authMiddleware);
@@ -159,5 +173,6 @@ router.use("/billings", billingRoutes);
 router.use("/anamneses", anamnesisRoutes);
 router.use("/professionals", professionalRoutes);
 router.use("/dashboard", checkRole("admin"), dashboardRoutes);
+router.use("/whatsapp", whatsappPrivateRoutes);
 
 export { router };

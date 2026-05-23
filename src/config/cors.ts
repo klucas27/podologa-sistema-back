@@ -4,6 +4,7 @@ import { env } from "./env";
 const DEV_ORIGINS: readonly string[] = [
   "http://localhost:3000",
   "http://localhost:5173",
+  "https://3593-179-97-64-219.ngrok-free.app/",
 ];
 
 const parseOrigins = (): string[] => {
