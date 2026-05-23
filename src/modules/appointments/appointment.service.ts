@@ -12,6 +12,7 @@ export interface CreateAppointmentInput {
   scheduledEnd: string;
   scheduledDate: string;
   status?: AppointmentStatus;
+  chiefComplaint?: string | null;
   notes?: string | null;
 }
 
@@ -21,6 +22,7 @@ export interface UpdateAppointmentInput {
   scheduledEnd?: string;
   scheduledDate?: string;
   status?: AppointmentStatus;
+  chiefComplaint?: string | null;
   notes?: string | null;
 }
 
@@ -78,6 +80,7 @@ export function createAppointmentService(repo: AppointmentRepository) {
         scheduledEnd: end,
         scheduledDate: toDateOnly(data.scheduledDate),
         status: data.status ?? "scheduled",
+        chiefComplaint: data.chiefComplaint ?? null,
         notes: data.notes ?? null,
       });
     },
@@ -86,7 +89,7 @@ export function createAppointmentService(repo: AppointmentRepository) {
       const existing = await repo.findByIdRaw(id);
       if (!existing) throw new NotFoundError("Agendamento não encontrado");
 
-      if (data.scheduledStart || data.scheduledEnd || data.scheduledDate || data.notes !== undefined) {
+      if (data.scheduledStart || data.scheduledEnd || data.scheduledDate || data.notes !== undefined || data.chiefComplaint !== undefined) {
         if (existing.status !== "scheduled" && !data.status) {
           throw new AppError("Apenas consultas com status 'Agendada' podem ser editadas", 400);
         }
@@ -102,6 +105,7 @@ export function createAppointmentService(repo: AppointmentRepository) {
       if (data.scheduledStart) updateData["scheduledStart"] = toDate(data.scheduledStart);
       if (data.scheduledEnd) updateData["scheduledEnd"] = toDate(data.scheduledEnd);
       if (data.scheduledDate) updateData["scheduledDate"] = toDateOnly(data.scheduledDate);
+      if (data.chiefComplaint !== undefined) updateData["chiefComplaint"] = data.chiefComplaint;
       if (data.notes !== undefined) updateData["notes"] = data.notes;
       if (data.professionalId !== undefined) updateData["professionalId"] = data.professionalId;
 

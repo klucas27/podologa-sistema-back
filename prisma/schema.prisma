@@ -23,7 +23,7 @@ model Patient {
     dateOfBirth   DateTime?     @map("date_of_birth") @db.Date
     maritalStatus MaritalStatus @default(other) @map("marital_status")
     occupation    String?       @db.VarChar(100)
-    cpf           String        @unique(map: "uc_patient_cpf") @db.Char(11)
+    cpf           String?       @unique(map: "uc_patient_cpf") @db.Char(11)
     phoneNumber   String?       @map("phone_number") @db.VarChar(20)
     email         String?       @unique(map: "uc_patient_email") @db.VarChar(191)
     zipCode       String?       @map("zip_code") @db.VarChar(20)
@@ -155,6 +155,7 @@ model Appointment {
     actualStartTime DateTime?         @map("actual_start_time") @db.DateTime(0)
     actualEndTime   DateTime?         @map("actual_end_time") @db.DateTime(0)
     status          AppointmentStatus @default(scheduled)
+    chiefComplaint  String?           @map("chief_complaint") @db.Text
     notes           String?           @db.Text
     createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamp(0)
     updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamp(0)
@@ -380,7 +381,7 @@ model WhatsappMessage {
 
 model WhatsappConversationState {
     phone     String   @id @db.VarChar(20)
-    state     String   @db.VarChar(50)
+    state     String   @db.Text
     updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(0)
 
     @@map("whatsapp_conversation_states")

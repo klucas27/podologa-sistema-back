@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { prisma } from "../infra";
+import { prisma, logger } from "../infra";
 import { env } from "../config";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { doubleCsrfProtection } from "../middlewares/csrf.middleware";
@@ -174,5 +174,22 @@ router.use("/anamneses", anamnesisRoutes);
 router.use("/professionals", professionalRoutes);
 router.use("/dashboard", checkRole("admin"), dashboardRoutes);
 router.use("/whatsapp", whatsappPrivateRoutes);
+
+// ── WhatsApp message cleanup (30-day retention) ──
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+async function runWhatsappCleanup() {
+  try {
+    const deleted = await whatsappRepo.deleteOldMessageHistory();
+    if (deleted > 0) {
+      logger.info({ deleted }, "WhatsApp: histórico de contatos inativos removido");
+    }
+  } catch (err) {
+    logger.error({ err }, "WhatsApp: erro ao executar limpeza de histórico");
+  }
+}
+
+runWhatsappCleanup();
+setInterval(runWhatsappCleanup, MS_PER_DAY);
 
 export { router };
