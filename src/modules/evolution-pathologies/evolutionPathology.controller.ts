@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import type { BodyPart } from "@prisma/client";
+import type { BodyPart } from "../../types/models";
 import { sanitizeOutput } from "../../shared/utils/sanitize";
 import type { createEvolutionPathologyService } from "./evolutionPathology.service";
 

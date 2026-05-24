@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
-import type { Professional } from "@prisma/client";
+import type { Professional } from "../../types/models";
 import type { ProfessionalRepository } from "./professional.repository";
 import { NotFoundError, ConflictError } from "../../shared/errors";
 

@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { ClinicalEvolution } from "@prisma/client";
+import type { ClinicalEvolution } from "../../types/models";
 import type { ClinicalEvolutionRepository } from "./clinicalEvolution.repository";
 import { NotFoundError } from "../../shared/errors";
 

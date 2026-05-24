@@ -3,10 +3,13 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import cookieParser from "cookie-parser";
+import path from "path";
 
 import { env, corsOptions, helmetOptions } from "./config";
 import { router } from "./modules";
 import { errorHandler, notFound, apiLimiter, correlationId } from "./middlewares";
+
+const CLIENT_DIR = path.join(__dirname, "client");
 
 const createApp = (): express.Express => {
   const app = express();
@@ -24,8 +27,13 @@ const createApp = (): express.Express => {
   app.use(correlationId);
 
   app.use("/api", router);
+  app.use("/api", notFound);
 
-  app.use(notFound);
+  app.use(express.static(CLIENT_DIR));
+  app.get(/.*/, (_req, res) => {
+    res.sendFile(path.join(CLIENT_DIR, "index.html"));
+  });
+
   app.use(errorHandler);
 
   return app;

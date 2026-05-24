@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Pathology } from "@prisma/client";
+import type { Pathology } from "../../types/models";
 import type { PathologyRepository } from "./pathology.repository";
 import { NotFoundError } from "../../shared/errors";
 

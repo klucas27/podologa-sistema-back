@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Patient, MaritalStatus } from "@prisma/client";
+import type { Patient, MaritalStatus } from "../../types/models";
 import type { PatientRepository } from "./patient.repository";
 import { NotFoundError } from "../../shared/errors";
 import { toDateOnly } from "../../shared/utils/date";

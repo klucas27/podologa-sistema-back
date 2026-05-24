@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { prisma } from "../infra";
 import { env } from "../config";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { doubleCsrfProtection } from "../middlewares/csrf.middleware";
@@ -74,55 +73,55 @@ import { createPatientProfessionalRepository, createPatientProfessionalService, 
 // ═══════════════════════════════════════════════════
 
 // Auth
-const authRepo = createAuthRepository(prisma);
+const authRepo = createAuthRepository();
 const authService = createAuthService(authRepo, env);
 const authCtrl = createAuthController(authService, env);
 const authRoutes = createAuthRoutes(authCtrl);
 
 // Patient
-const patientRepo = createPatientRepository(prisma);
+const patientRepo = createPatientRepository();
 const patientService = createPatientService(patientRepo);
 const patientCtrl = createPatientController(patientService);
 const patientRoutes = createPatientRoutes(patientCtrl);
 
 // Appointment
-const appointmentRepo = createAppointmentRepository(prisma);
+const appointmentRepo = createAppointmentRepository();
 const appointmentService = createAppointmentService(appointmentRepo);
 const appointmentCtrl = createAppointmentController(appointmentService);
 const appointmentRoutes = createAppointmentRoutes(appointmentCtrl);
 
 // Anamnesis
-const anamnesisRepo = createAnamnesisRepository(prisma);
+const anamnesisRepo = createAnamnesisRepository();
 const anamnesisService = createAnamnesisService(anamnesisRepo);
 const anamnesisCtrl = createAnamnesisController(anamnesisService);
 const anamnesisRoutes = createAnamnesisRoutes(anamnesisCtrl);
 
 // Clinical Evolution
-const clinicalEvolutionRepo = createClinicalEvolutionRepository(prisma);
+const clinicalEvolutionRepo = createClinicalEvolutionRepository();
 const clinicalEvolutionService = createClinicalEvolutionService(clinicalEvolutionRepo);
 const clinicalEvolutionCtrl = createClinicalEvolutionController(clinicalEvolutionService);
 const clinicalEvolutionRoutes = createClinicalEvolutionRoutes(clinicalEvolutionCtrl);
 
 // Pathology
-const pathologyRepo = createPathologyRepository(prisma);
+const pathologyRepo = createPathologyRepository();
 const pathologyService = createPathologyService(pathologyRepo);
 const pathologyCtrl = createPathologyController(pathologyService);
 const pathologyRoutes = createPathologyRoutes(pathologyCtrl);
 
 // Evolution Pathology
-const evolutionPathologyRepo = createEvolutionPathologyRepository(prisma);
+const evolutionPathologyRepo = createEvolutionPathologyRepository();
 const evolutionPathologyService = createEvolutionPathologyService(evolutionPathologyRepo);
 const evolutionPathologyCtrl = createEvolutionPathologyController(evolutionPathologyService);
 const evolutionPathologyRoutes = createEvolutionPathologyRoutes(evolutionPathologyCtrl);
 
 // Billing
-const billingRepo = createBillingRepository(prisma);
+const billingRepo = createBillingRepository();
 const billingService = createBillingService(billingRepo);
 const billingCtrl = createBillingController(billingService);
 const billingRoutes = createBillingRoutes(billingCtrl);
 
 // Professional
-const professionalRepo = createProfessionalRepository(prisma);
+const professionalRepo = createProfessionalRepository();
 const professionalService = createProfessionalService(professionalRepo);
 const professionalCtrl = createProfessionalController(professionalService);
 const professionalRoutes = createProfessionalRoutes(professionalCtrl);
@@ -132,7 +131,7 @@ const dashboardCtrl = createDashboardController();
 const dashboardRoutes = createDashboardRoutes(dashboardCtrl);
 
 // Patient Professionals
-const patientProfessionalRepo = createPatientProfessionalRepository(prisma);
+const patientProfessionalRepo = createPatientProfessionalRepository();
 const patientProfessionalService = createPatientProfessionalService({ patientProfessionalRepo });
 const patientProfessionalRoutes = createPatientProfessionalRoutes(patientProfessionalService);
 

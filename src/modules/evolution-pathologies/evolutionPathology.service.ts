@@ -1,4 +1,4 @@
-import type { EvolutionPathology, BodyPart } from "@prisma/client";
+import type { EvolutionPathology, BodyPart } from "../../types/models";
 import type { EvolutionPathologyRepository, EvolutionPathologyKey } from "./evolutionPathology.repository";
 import { NotFoundError } from "../../shared/errors";
 

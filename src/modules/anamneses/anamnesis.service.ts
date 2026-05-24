@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Anamnesis, Perfusion, PainSensitivity } from "@prisma/client";
+import type { Anamnesis, Perfusion, PainSensitivity } from "../../types/models";
 import type { AnamnesisRepository } from "./anamnesis.repository";
 import { NotFoundError } from "../../shared/errors";
 

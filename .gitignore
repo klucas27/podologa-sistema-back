@@ -5,6 +5,8 @@ node_modules/
 dist/
 build/
 /build
+deploy.zip
+deploy.sh
 
 # Variáveis de ambiente
 .env

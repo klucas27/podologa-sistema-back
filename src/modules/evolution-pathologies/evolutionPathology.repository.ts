@@ -1,4 +1,7 @@
-import type { PrismaClient, EvolutionPathology, BodyPart } from "@prisma/client";
+import type { RowDataPacket } from "mysql2";
+import { pool } from "../../infra/database";
+import { mapRow, buildSet } from "../../infra/database/helpers";
+import type { EvolutionPathology, BodyPart, Pathology } from "../../types/models";
 
 export interface EvolutionPathologyKey {
   evolutionId: string;
@@ -6,43 +9,98 @@ export interface EvolutionPathologyKey {
   bodyPart: BodyPart;
 }
 
-export function createEvolutionPathologyRepository(prisma: PrismaClient) {
+async function attachPathology(ep: EvolutionPathology): Promise<EvolutionPathology> {
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    "SELECT * FROM pathologies WHERE id = ? LIMIT 1",
+    [ep.pathologyId],
+  );
+  if (rows[0]) ep.pathology = mapRow<Pathology>(rows[0]);
+  return ep;
+}
+
+export function createEvolutionPathologyRepository() {
   return {
-    findByKey(key: EvolutionPathologyKey): Promise<EvolutionPathology | null> {
-      return prisma.evolutionPathology.findUnique({
-        where: { evolutionId_pathologyId_bodyPart: key },
-        include: { pathology: true },
+    async findByKey(key: EvolutionPathologyKey): Promise<EvolutionPathology | null> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT * FROM evolution_pathologies
+         WHERE evolution_id = ? AND pathology_id = ? AND body_part = ? LIMIT 1`,
+        [key.evolutionId, key.pathologyId, key.bodyPart],
+      );
+      if (!rows[0]) return null;
+      return attachPathology(mapRow<EvolutionPathology>(rows[0]));
+    },
+
+    async findByEvolution(evolutionId: string): Promise<EvolutionPathology[]> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT ep.*, pt.id AS path_id, pt.name AS path_name, pt.description AS path_description,
+                pt.created_at AS path_createdAt, pt.updated_at AS path_updatedAt
+         FROM evolution_pathologies ep
+         JOIN pathologies pt ON pt.id = ep.pathology_id
+         WHERE ep.evolution_id = ?
+         ORDER BY ep.created_at ASC`,
+        [evolutionId],
+      );
+      return rows.map((r) => {
+        const ep = mapRow<EvolutionPathology>(r);
+        ep.pathology = {
+          id:          r["path_id"] as string,
+          name:        r["path_name"] as string,
+          description: r["path_description"] as string | null,
+          createdAt:   r["path_createdAt"] as Date,
+          updatedAt:   r["path_updatedAt"] as Date,
+        };
+        return ep;
       });
     },
 
-    findByEvolution(evolutionId: string): Promise<EvolutionPathology[]> {
-      return prisma.evolutionPathology.findMany({
-        where: { evolutionId },
-        include: { pathology: true },
-        orderBy: { createdAt: "asc" },
-      });
-    },
-
-    create(data: {
+    async create(data: {
       evolutionId: string;
       pathologyId: string;
       bodyPart: BodyPart;
       notes: string | null;
     }): Promise<EvolutionPathology> {
-      return prisma.evolutionPathology.create({ data });
+      await pool.execute(
+        `INSERT INTO evolution_pathologies (evolution_id, pathology_id, body_part, notes)
+         VALUES (?, ?, ?, ?)`,
+        [data.evolutionId, data.pathologyId, data.bodyPart, data.notes],
+      );
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT * FROM evolution_pathologies
+         WHERE evolution_id = ? AND pathology_id = ? AND body_part = ? LIMIT 1`,
+        [data.evolutionId, data.pathologyId, data.bodyPart],
+      );
+      return mapRow<EvolutionPathology>(rows[0]!);
     },
 
-    update(key: EvolutionPathologyKey, data: Record<string, unknown>): Promise<EvolutionPathology> {
-      return prisma.evolutionPathology.update({
-        where: { evolutionId_pathologyId_bodyPart: key },
-        data,
-      });
+    async update(key: EvolutionPathologyKey, data: Record<string, unknown>): Promise<EvolutionPathology> {
+      const { clause, values } = buildSet(data);
+      if (clause) {
+        await pool.execute(
+          `UPDATE evolution_pathologies SET ${clause}
+           WHERE evolution_id = ? AND pathology_id = ? AND body_part = ?`,
+          [...values, key.evolutionId, key.pathologyId, key.bodyPart],
+        );
+      }
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT * FROM evolution_pathologies
+         WHERE evolution_id = ? AND pathology_id = ? AND body_part = ? LIMIT 1`,
+        [key.evolutionId, key.pathologyId, key.bodyPart],
+      );
+      return mapRow<EvolutionPathology>(rows[0]!);
     },
 
-    delete(key: EvolutionPathologyKey): Promise<EvolutionPathology> {
-      return prisma.evolutionPathology.delete({
-        where: { evolutionId_pathologyId_bodyPart: key },
-      });
+    async delete(key: EvolutionPathologyKey): Promise<EvolutionPathology> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT * FROM evolution_pathologies
+         WHERE evolution_id = ? AND pathology_id = ? AND body_part = ? LIMIT 1`,
+        [key.evolutionId, key.pathologyId, key.bodyPart],
+      );
+      await pool.execute(
+        `DELETE FROM evolution_pathologies
+         WHERE evolution_id = ? AND pathology_id = ? AND body_part = ?`,
+        [key.evolutionId, key.pathologyId, key.bodyPart],
+      );
+      return mapRow<EvolutionPathology>(rows[0]!);
     },
   };
 }

@@ -1,25 +1,59 @@
-import type { PrismaClient, Pathology } from "@prisma/client";
+import type { RowDataPacket } from "mysql2";
+import { pool } from "../../infra/database";
+import { mapRow, buildSet } from "../../infra/database/helpers";
+import type { Pathology } from "../../types/models";
 
-export function createPathologyRepository(prisma: PrismaClient) {
+export function createPathologyRepository() {
   return {
-    findById(id: string): Promise<Pathology | null> {
-      return prisma.pathology.findUnique({ where: { id } });
+    async findById(id: string): Promise<Pathology | null> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT * FROM pathologies WHERE id = ? LIMIT 1",
+        [id],
+      );
+      return rows[0] ? mapRow<Pathology>(rows[0]) : null;
     },
 
-    findMany(): Promise<Pathology[]> {
-      return prisma.pathology.findMany({ orderBy: { name: "asc" } });
+    async findMany(): Promise<Pathology[]> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT * FROM pathologies ORDER BY name ASC",
+      );
+      return rows.map((r) => mapRow<Pathology>(r));
     },
 
-    create(data: { id: string; name: string; description: string | null }): Promise<Pathology> {
-      return prisma.pathology.create({ data });
+    async create(data: { id: string; name: string; description: string | null }): Promise<Pathology> {
+      await pool.execute(
+        "INSERT INTO pathologies (id, name, description) VALUES (?, ?, ?)",
+        [data.id, data.name, data.description],
+      );
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT * FROM pathologies WHERE id = ? LIMIT 1",
+        [data.id],
+      );
+      return mapRow<Pathology>(rows[0]!);
     },
 
-    update(id: string, data: Record<string, unknown>): Promise<Pathology> {
-      return prisma.pathology.update({ where: { id }, data });
+    async update(id: string, data: Record<string, unknown>): Promise<Pathology> {
+      const { clause, values } = buildSet(data);
+      if (clause) {
+        await pool.execute(
+          `UPDATE pathologies SET ${clause} WHERE id = ?`,
+          [...values, id],
+        );
+      }
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT * FROM pathologies WHERE id = ? LIMIT 1",
+        [id],
+      );
+      return mapRow<Pathology>(rows[0]!);
     },
 
-    delete(id: string): Promise<Pathology> {
-      return prisma.pathology.delete({ where: { id } });
+    async delete(id: string): Promise<Pathology> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT * FROM pathologies WHERE id = ? LIMIT 1",
+        [id],
+      );
+      await pool.execute("DELETE FROM pathologies WHERE id = ?", [id]);
+      return mapRow<Pathology>(rows[0]!);
     },
   };
 }

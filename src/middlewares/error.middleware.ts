@@ -1,5 +1,4 @@
 import type { Request, Response, NextFunction } from "express";
-import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import { AppError } from "../shared/errors";
 import { logger } from "../infra";
@@ -40,24 +39,8 @@ export const errorHandler = (
     return;
   }
 
-  // ── Prisma: registro não encontrado ────────────
-  if (
-    err instanceof Prisma.PrismaClientKnownRequestError &&
-    err.code === "P2025"
-  ) {
-    res.status(404).json({
-      status: "error",
-      message: "Registro não encontrado",
-      ...(correlationId ? { correlationId } : {}),
-    });
-    return;
-  }
-
-  // ── Prisma: violação de constraint unique ──────
-  if (
-    err instanceof Prisma.PrismaClientKnownRequestError &&
-    err.code === "P2002"
-  ) {
+  // ── mysql2: unique constraint violation (ER_DUP_ENTRY) ───
+  if ((err as NodeJS.ErrnoException).code === "ER_DUP_ENTRY") {
     res.status(409).json({
       status: "error",
       message: "Registro já existe (violação de unicidade)",
@@ -66,24 +49,14 @@ export const errorHandler = (
     return;
   }
 
-  // ── Prisma: violação de FK / restrict ──────────
+  // ── mysql2: FK restrict (ER_ROW_IS_REFERENCED_2 / ER_NO_REFERENCED_ROW_2) ──
   if (
-    err instanceof Prisma.PrismaClientKnownRequestError &&
-    err.code === "P2003"
+    (err as NodeJS.ErrnoException).code === "ER_ROW_IS_REFERENCED_2" ||
+    (err as NodeJS.ErrnoException).code === "ER_NO_REFERENCED_ROW_2"
   ) {
     res.status(409).json({
       status: "error",
       message: "Operação bloqueada por referência existente",
-      ...(correlationId ? { correlationId } : {}),
-    });
-    return;
-  }
-
-  // ── Prisma: erro de validação ──────────────────
-  if (err instanceof Prisma.PrismaClientValidationError) {
-    res.status(400).json({
-      status: "error",
-      message: "Dados inválidos na requisição",
       ...(correlationId ? { correlationId } : {}),
     });
     return;

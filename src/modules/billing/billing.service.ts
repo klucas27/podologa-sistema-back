@@ -1,6 +1,5 @@
 import crypto from "crypto";
-import type { Billing, PaymentMethod, BillingStatus } from "@prisma/client";
-import { Decimal } from "@prisma/client/runtime/library";
+import type { Billing, PaymentMethod, BillingStatus } from "../../types/models";
 import type { BillingRepository } from "./billing.repository";
 import { NotFoundError } from "../../shared/errors";
 import { nowSP, toDate } from "../../shared/utils/date";
@@ -50,10 +49,11 @@ export function createBillingService(repo: BillingRepository) {
       return repo.create({
         id: crypto.randomUUID(),
         appointmentId: data.appointmentId,
-        amount: new Decimal(data.amount),
+        amount: data.amount,
         paymentMethod: data.paymentMethod,
         status,
         paidAt,
+        deletedAt: null,
       });
     },
 
@@ -62,7 +62,7 @@ export function createBillingService(repo: BillingRepository) {
       if (!existing) throw new NotFoundError("Cobrança não encontrada");
 
       const updateData: Record<string, unknown> = {};
-      if (data.amount !== undefined) updateData["amount"] = new Decimal(data.amount);
+      if (data.amount !== undefined) updateData["amount"] = data.amount;
       if (data.paymentMethod) updateData["paymentMethod"] = data.paymentMethod;
       if (data.status) updateData["status"] = data.status;
       if (data.paidAt !== undefined) {

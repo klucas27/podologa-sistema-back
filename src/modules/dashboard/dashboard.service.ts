@@ -1,4 +1,5 @@
-import { prisma } from "../../infra";
+import type { RowDataPacket } from "mysql2";
+import { pool } from "../../infra";
 import {
   nowSP,
   startOfDaySP,
@@ -137,48 +138,65 @@ function aggregateByPeriod<T>(
   return Array.from(buckets, ([label, value]) => ({ label, value }));
 }
 
+const EVOLUTIONS_FOR_ALERTS_SQL = `
+  SELECT ce.id, ce.recommended_return_days, ce.created_at, p.full_name AS patient_name
+  FROM clinical_evolutions ce
+  JOIN appointments a ON a.id = ce.appointment_id
+  JOIN patient p ON p.id = a.patient_id
+  WHERE ce.deleted_at IS NULL AND ce.recommended_return_days IS NOT NULL
+    AND a.deleted_at IS NULL AND a.status = 'completed'
+    AND p.admin_id = ?`;
+
 const buildAppointmentsChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
-  const appointments = await prisma.appointment.findMany({
-    where: { deletedAt: null, scheduledDate: { gte: start, lte: end }, status: { not: "cancelled" }, patient: { adminId } },
-    select: { scheduledDate: true, scheduledStart: true },
-  });
-  return aggregateByPeriod(appointments, period, (a) => period === "daily" ? a.scheduledStart : a.scheduledDate);
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT scheduled_date, scheduled_start
+     FROM appointments a
+     JOIN patient p ON p.id = a.patient_id
+     WHERE a.deleted_at IS NULL AND a.scheduled_date >= ? AND a.scheduled_date <= ?
+       AND a.status != 'cancelled' AND p.admin_id = ?`,
+    [start, end, adminId],
+  );
+  return aggregateByPeriod(rows, period, (r) =>
+    period === "daily" ? r["scheduled_start"] as Date : r["scheduled_date"] as Date,
+  );
 };
 
 const buildPatientsChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
-  const patients = await prisma.patient.findMany({
-    where: { adminId, createdAt: { gte: start, lte: end } },
-    select: { createdAt: true },
-  });
-  return aggregateByPeriod(patients, period, (p) => p.createdAt);
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    "SELECT created_at FROM patient WHERE admin_id = ? AND created_at >= ? AND created_at <= ?",
+    [adminId, start, end],
+  );
+  return aggregateByPeriod(rows, period, (r) => r["created_at"] as Date);
 };
 
 const buildRevenueChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
-  const billings = await prisma.billing.findMany({
-    where: { deletedAt: null, status: "paid", paidAt: { not: null, gte: start, lte: end }, appointment: { patient: { adminId } } },
-    select: { paidAt: true, amount: true },
-  });
-  return aggregateByPeriod(billings, period, (b) => b.paidAt!, (b) => b.amount.toNumber());
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT b.paid_at, b.amount
+     FROM billings b
+     JOIN appointments a ON a.id = b.appointment_id
+     JOIN patient p ON p.id = a.patient_id
+     WHERE b.deleted_at IS NULL AND b.status = 'paid'
+       AND b.paid_at IS NOT NULL AND b.paid_at >= ? AND b.paid_at <= ?
+       AND p.admin_id = ?`,
+    [start, end, adminId],
+  );
+  return aggregateByPeriod(rows, period, (r) => r["paid_at"] as Date, (r) => r["amount"] as number);
 };
 
 const buildAlertsChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
-  const evolutions = await prisma.clinicalEvolution.findMany({
-    where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed", patient: { adminId } } },
-    select: { recommendedReturnDays: true, createdAt: true },
-  });
-  const alertsInPeriod = evolutions.filter((evo) => {
-    if (evo.recommendedReturnDays === null) return false;
-    const returnDate = new Date(evo.createdAt);
-    returnDate.setDate(returnDate.getDate() + evo.recommendedReturnDays);
+  const [rows] = await pool.execute<RowDataPacket[]>(EVOLUTIONS_FOR_ALERTS_SQL, [adminId]);
+  const alertsInPeriod = (rows as Array<{ recommended_return_days: number; created_at: Date }>).filter((r) => {
+    const returnDate = new Date(r.created_at);
+    returnDate.setDate(returnDate.getDate() + r.recommended_return_days);
     return returnDate >= start && returnDate <= end;
   });
-  const records = alertsInPeriod.map((evo) => {
-    const returnDate = new Date(evo.createdAt);
-    returnDate.setDate(returnDate.getDate() + evo.recommendedReturnDays!);
+  const records = alertsInPeriod.map((r) => {
+    const returnDate = new Date(r.created_at);
+    returnDate.setDate(returnDate.getDate() + r.recommended_return_days);
     return { date: returnDate };
   });
   return aggregateByPeriod(records, period, (r) => r.date);
@@ -187,18 +205,20 @@ const buildAlertsChart = async (period: PeriodType, adminId: string): Promise<Ch
 const getReturnAlertsList = async (adminId: string): Promise<ReturnAlertItem[]> => {
   const now = nowSP();
   const todayEnd = endOfDaySP(now);
-  const evolutions = await prisma.clinicalEvolution.findMany({
-    where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed", patient: { adminId, fullName: { not: undefined } } } },
-    select: { id: true, recommendedReturnDays: true, createdAt: true, appointment: { select: { patient: { select: { fullName: true } } } } },
-  });
+  const [rows] = await pool.execute<RowDataPacket[]>(EVOLUTIONS_FOR_ALERTS_SQL, [adminId]);
   const alerts: ReturnAlertItem[] = [];
-  for (const evo of evolutions) {
-    if (evo.recommendedReturnDays === null) continue;
-    const returnDate = new Date(evo.createdAt);
-    returnDate.setDate(returnDate.getDate() + evo.recommendedReturnDays);
+  for (const r of rows) {
+    const returnDate = new Date(r["created_at"] as Date);
+    returnDate.setDate(returnDate.getDate() + (r["recommended_return_days"] as number));
     if (returnDate <= todayEnd) {
       const daysOverdue = Math.floor((now.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24));
-      alerts.push({ id: evo.id, patient: evo.appointment.patient.fullName, dueDate: returnDate.toISOString().slice(0, 10), daysOverdue, urgent: daysOverdue >= 7 });
+      alerts.push({
+        id: r["id"] as string,
+        patient: r["patient_name"] as string,
+        dueDate: returnDate.toISOString().slice(0, 10),
+        daysOverdue,
+        urgent: daysOverdue >= 7,
+      });
     }
   }
   alerts.sort((a, b) => b.daysOverdue - a.daysOverdue);
@@ -216,53 +236,56 @@ const computeMovingAverage = (data: ChartDataPoint[], window: number): ChartData
 
 const buildPreviousPeriodPatientsChart = async (period: PeriodType, adminId: string): Promise<ChartDataPoint[]> => {
   const { start, end } = getPreviousPeriodRange(period);
-  const patients = await prisma.patient.findMany({ where: { adminId, createdAt: { gte: start, lte: end } }, select: { createdAt: true } });
-  return aggregateByPeriod(patients, period, (p) => p.createdAt);
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    "SELECT created_at FROM patient WHERE admin_id = ? AND created_at >= ? AND created_at <= ?",
+    [adminId, start, end],
+  );
+  return aggregateByPeriod(rows, period, (r) => r["created_at"] as Date);
 };
 
 const buildWaterfallData = async (period: PeriodType, adminId: string): Promise<WaterfallDataPoint[]> => {
   const { start, end } = getPeriodRange(period);
-  const billingWhere = { deletedAt: null, createdAt: { gte: start, lte: end }, appointment: { patient: { adminId } } };
-  const [totalAgg, paidAgg, cancelledAgg, refundedAgg, pendingAgg] = await Promise.all([
-    prisma.billing.aggregate({ where: billingWhere, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { ...billingWhere, status: "paid" }, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { ...billingWhere, status: "cancelled" }, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { ...billingWhere, status: "refunded" }, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { ...billingWhere, status: "pending" }, _sum: { amount: true } }),
-  ]);
-  const total = totalAgg._sum.amount?.toNumber() ?? 0;
-  const paid = paidAgg._sum.amount?.toNumber() ?? 0;
-  const cancelled = cancelledAgg._sum.amount?.toNumber() ?? 0;
-  const refunded = refundedAgg._sum.amount?.toNumber() ?? 0;
-  const pending = pendingAgg._sum.amount?.toNumber() ?? 0;
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT b.status, COALESCE(SUM(b.amount), 0) AS total
+     FROM billings b
+     JOIN appointments a ON a.id = b.appointment_id
+     JOIN patient p ON p.id = a.patient_id
+     WHERE b.deleted_at IS NULL AND b.created_at >= ? AND b.created_at <= ? AND p.admin_id = ?
+     GROUP BY b.status`,
+    [start, end, adminId],
+  );
+  const byStatus = new Map<string, number>();
+  let grandTotal = 0;
+  for (const r of rows) {
+    const s = r["status"] as string;
+    const t = r["total"] as number;
+    byStatus.set(s, t);
+    grandTotal += t;
+  }
   return [
-    { label: "Receita Bruta", value: total, type: "positive" },
-    { label: "Cancelados", value: -cancelled, type: "negative" },
-    { label: "Reembolsados", value: -refunded, type: "negative" },
-    { label: "Pendentes", value: -pending, type: "negative" },
-    { label: "Recebido", value: paid, type: "total" },
+    { label: "Receita Bruta",  value: grandTotal,                       type: "positive" },
+    { label: "Cancelados",     value: -(byStatus.get("cancelled") ?? 0), type: "negative" },
+    { label: "Reembolsados",   value: -(byStatus.get("refunded") ?? 0),  type: "negative" },
+    { label: "Pendentes",      value: -(byStatus.get("pending") ?? 0),   type: "negative" },
+    { label: "Recebido",       value: byStatus.get("paid") ?? 0,         type: "total"    },
   ];
 };
 
 const OVERDUE_CATEGORIES = [
-  { key: "1-3d", min: 1, max: 3 },
-  { key: "4-7d", min: 4, max: 7 },
-  { key: "8-14d", min: 8, max: 14 },
-  { key: "15-30d", min: 15, max: 30 },
-  { key: "30+d", min: 31, max: Infinity },
+  { key: "1-3d",  min: 1,  max: 3  },
+  { key: "4-7d",  min: 4,  max: 7  },
+  { key: "8-14d", min: 8,  max: 14 },
+  { key: "15-30d",min: 15, max: 30 },
+  { key: "30+d",  min: 31, max: Infinity },
 ];
 
 const buildHeatmapData = async (adminId: string): Promise<HeatmapDataPoint[]> => {
   const now = nowSP();
-  const evolutions = await prisma.clinicalEvolution.findMany({
-    where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed", patient: { adminId } } },
-    select: { recommendedReturnDays: true, createdAt: true },
-  });
+  const [rows] = await pool.execute<RowDataPacket[]>(EVOLUTIONS_FOR_ALERTS_SQL, [adminId]);
   const buckets = new Map<string, number>();
-  for (const evo of evolutions) {
-    if (evo.recommendedReturnDays === null) continue;
-    const returnDate = new Date(evo.createdAt);
-    returnDate.setDate(returnDate.getDate() + evo.recommendedReturnDays);
+  for (const r of rows) {
+    const returnDate = new Date(r["created_at"] as Date);
+    returnDate.setDate(returnDate.getDate() + (r["recommended_return_days"] as number));
     if (returnDate > now) continue;
     const daysOverdue = Math.floor((now.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24));
     if (daysOverdue < 1) continue;
@@ -275,8 +298,7 @@ const buildHeatmapData = async (adminId: string): Promise<HeatmapDataPoint[]> =>
   const heatmap: HeatmapDataPoint[] = [];
   for (const day of DAY_LABELS) {
     for (const cat of OVERDUE_CATEGORIES) {
-      const key = `${day}|${cat.key}`;
-      heatmap.push({ x: day, y: cat.key, value: buckets.get(key) ?? 0 });
+      heatmap.push({ x: day, y: cat.key, value: buckets.get(`${day}|${cat.key}`) ?? 0 });
     }
   }
   return heatmap;
@@ -295,26 +317,47 @@ export async function getDashboardData(
 
   const chartBuilders: Record<KpiType, () => Promise<ChartDataPoint[]>> = {
     appointments: () => buildAppointmentsChart(period, adminId),
-    patients: () => buildPatientsChart(period, adminId),
-    revenue: () => buildRevenueChart(period, adminId),
-    alerts: () => buildAlertsChart(period, adminId),
+    patients:     () => buildPatientsChart(period, adminId),
+    revenue:      () => buildRevenueChart(period, adminId),
+    alerts:       () => buildAlertsChart(period, adminId),
   };
 
+  const APT_COUNT_SQL = `
+    SELECT COUNT(*) AS cnt
+    FROM appointments a JOIN patient p ON p.id = a.patient_id
+    WHERE a.deleted_at IS NULL AND a.scheduled_date >= ? AND a.scheduled_date <= ?
+      AND a.status != 'cancelled' AND p.admin_id = ?`;
+
+  const PAT_COUNT_SQL = `SELECT COUNT(*) AS cnt FROM patient WHERE admin_id = ? AND created_at >= ? AND created_at <= ?`;
+
+  const REV_SUM_SQL = `
+    SELECT COALESCE(SUM(b.amount), 0) AS total
+    FROM billings b JOIN appointments a ON a.id = b.appointment_id JOIN patient p ON p.id = a.patient_id
+    WHERE b.deleted_at IS NULL AND b.status = 'paid'
+      AND b.paid_at >= ? AND b.paid_at <= ? AND p.admin_id = ?`;
+
   const [
-    appointmentsCount, appointmentsPrevCount,
-    newPatientsCount, newPatientsPrevCount,
-    revenueAgg, revenuePrevAgg,
-    returnAlertEvolutions, todayAppointmentsList,
+    [aptCurRows], [aptPrevRows],
+    [patCurRows], [patPrevRows],
+    [revCurRows], [revPrevRows],
+    [alertRows], [todayAptRows],
     chartData, returnAlerts,
   ] = await Promise.all([
-    prisma.appointment.count({ where: { deletedAt: null, scheduledDate: { gte: currentStart, lte: currentEnd }, status: { not: "cancelled" }, patient: { adminId } } }),
-    prisma.appointment.count({ where: { deletedAt: null, scheduledDate: { gte: prevStart, lte: prevEnd }, status: { not: "cancelled" }, patient: { adminId } } }),
-    prisma.patient.count({ where: { adminId, createdAt: { gte: currentStart, lte: currentEnd } } }),
-    prisma.patient.count({ where: { adminId, createdAt: { gte: prevStart, lte: prevEnd } } }),
-    prisma.billing.aggregate({ where: { deletedAt: null, status: "paid", paidAt: { gte: currentStart, lte: currentEnd }, appointment: { patient: { adminId } } }, _sum: { amount: true } }),
-    prisma.billing.aggregate({ where: { deletedAt: null, status: "paid", paidAt: { gte: prevStart, lte: prevEnd }, appointment: { patient: { adminId } } }, _sum: { amount: true } }),
-    prisma.clinicalEvolution.findMany({ where: { deletedAt: null, recommendedReturnDays: { not: null }, appointment: { deletedAt: null, status: "completed", patient: { adminId } } }, select: { recommendedReturnDays: true, createdAt: true } }),
-    prisma.appointment.findMany({ where: { deletedAt: null, scheduledDate: { gte: todayStart, lte: todayEnd }, status: { not: "cancelled" }, patient: { adminId } }, include: { patient: { select: { fullName: true } } }, orderBy: { scheduledStart: "asc" } }),
+    pool.execute<RowDataPacket[]>(APT_COUNT_SQL, [currentStart, currentEnd, adminId]),
+    pool.execute<RowDataPacket[]>(APT_COUNT_SQL, [prevStart, prevEnd, adminId]),
+    pool.execute<RowDataPacket[]>(PAT_COUNT_SQL, [adminId, currentStart, currentEnd]),
+    pool.execute<RowDataPacket[]>(PAT_COUNT_SQL, [adminId, prevStart, prevEnd]),
+    pool.execute<RowDataPacket[]>(REV_SUM_SQL, [currentStart, currentEnd, adminId]),
+    pool.execute<RowDataPacket[]>(REV_SUM_SQL, [prevStart, prevEnd, adminId]),
+    pool.execute<RowDataPacket[]>(EVOLUTIONS_FOR_ALERTS_SQL, [adminId]),
+    pool.execute<RowDataPacket[]>(
+      `SELECT a.id, a.scheduled_start, a.notes, a.status, p.full_name AS patient_full_name
+       FROM appointments a JOIN patient p ON p.id = a.patient_id
+       WHERE a.deleted_at IS NULL AND a.scheduled_date >= ? AND a.scheduled_date <= ?
+         AND a.status != 'cancelled' AND p.admin_id = ?
+       ORDER BY a.scheduled_start ASC`,
+      [todayStart, todayEnd, adminId],
+    ),
     chartBuilders[kpi](),
     getReturnAlertsList(adminId),
   ]);
@@ -327,10 +370,9 @@ export async function getDashboardData(
 
   let urgentCount = 0;
   let totalAlerts = 0;
-  for (const evo of returnAlertEvolutions) {
-    if (evo.recommendedReturnDays === null) continue;
-    const returnDate = new Date(evo.createdAt);
-    returnDate.setDate(returnDate.getDate() + evo.recommendedReturnDays);
+  for (const r of alertRows) {
+    const returnDate = new Date(r["created_at"] as Date);
+    returnDate.setDate(returnDate.getDate() + (r["recommended_return_days"] as number));
     if (returnDate <= todayEnd) {
       totalAlerts++;
       const daysOverdue = Math.floor((now.getTime() - returnDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -338,25 +380,22 @@ export async function getDashboardData(
     }
   }
 
-  const todayAppointments: DashboardAppointment[] = todayAppointmentsList.map((apt) => ({
-    id: apt.id,
-    patient: apt.patient.fullName,
-    time: formatTimeSP(apt.scheduledStart),
-    procedure: apt.notes,
-    status: apt.status,
+  const todayAppointments: DashboardAppointment[] = todayAptRows.map((r) => ({
+    id:        r["id"] as string,
+    patient:   r["patient_full_name"] as string,
+    time:      formatTimeSP(r["scheduled_start"] as Date),
+    procedure: r["notes"] as string | null,
+    status:    r["status"] as string,
   }));
-
-  const revenue = revenueAgg._sum.amount?.toNumber() ?? 0;
-  const revenuePrevious = revenuePrevAgg._sum.amount?.toNumber() ?? 0;
 
   return {
     metrics: {
-      appointments: appointmentsCount,
-      appointmentsPrevious: appointmentsPrevCount,
-      newPatients: newPatientsCount,
-      newPatientsPrevious: newPatientsPrevCount,
-      revenue,
-      revenuePrevious,
+      appointments:         aptCurRows[0]!["cnt"] as number,
+      appointmentsPrevious: aptPrevRows[0]!["cnt"] as number,
+      newPatients:          patCurRows[0]!["cnt"] as number,
+      newPatientsPrevious:  patPrevRows[0]!["cnt"] as number,
+      revenue:              revCurRows[0]!["total"] as number,
+      revenuePrevious:      revPrevRows[0]!["total"] as number,
       returnAlerts: { total: totalAlerts, urgent: urgentCount },
     },
     todayAppointments,

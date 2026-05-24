@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { Appointment, AppointmentStatus } from "@prisma/client";
+import type { Appointment, AppointmentStatus } from "../../types/models";
 import type { AppointmentRepository } from "./appointment.repository";
 import { NotFoundError, ConflictError, AppError } from "../../shared/errors";
 import { nowSP, toDateOnly, toDate, formatTimeSP } from "../../shared/utils/date";
@@ -77,8 +77,11 @@ export function createAppointmentService(repo: AppointmentRepository) {
         scheduledStart: start,
         scheduledEnd: end,
         scheduledDate: toDateOnly(data.scheduledDate),
+        actualStartTime: null,
+        actualEndTime: null,
         status: data.status ?? "scheduled",
         notes: data.notes ?? null,
+        deletedAt: null,
       });
     },
 

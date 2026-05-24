@@ -1,40 +1,87 @@
-import type { PrismaClient, PatientProfessional } from "@prisma/client";
+import type { RowDataPacket } from "mysql2";
+import { pool, withTransaction } from "../../infra/database";
+import type { PatientProfessional } from "../../types/models";
 
-export function createPatientProfessionalRepository(prisma: PrismaClient) {
+export function createPatientProfessionalRepository() {
   return {
-    findByPatient(patientId: string) {
-      return prisma.patientProfessional.findMany({
-        where: { patientId },
-        include: { professional: { select: { id: true, fullName: true, specialty: true } } },
-      });
+    async findByPatient(patientId: string): Promise<PatientProfessional[]> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT pp.patient_id, pp.professional_id, pp.created_at,
+                p.id AS prof_id, p.full_name AS prof_fullName, p.specialty AS prof_specialty
+         FROM patient_professional pp
+         JOIN professional p ON p.id = pp.professional_id
+         WHERE pp.patient_id = ?`,
+        [patientId],
+      );
+      return rows.map((r) => ({
+        patientId:      r["patient_id"] as string,
+        professionalId: r["professional_id"] as string,
+        createdAt:      r["created_at"] as Date,
+        professional: {
+          id:        r["prof_id"] as string,
+          fullName:  r["prof_fullName"] as string,
+          specialty: r["prof_specialty"] as string | null,
+        },
+      }));
     },
 
-    link(patientId: string, professionalId: string): Promise<PatientProfessional> {
-      return prisma.patientProfessional.upsert({
-        where: { patientId_professionalId: { patientId, professionalId } },
-        update: {},
-        create: { patientId, professionalId },
-      });
+    async link(patientId: string, professionalId: string): Promise<PatientProfessional> {
+      // INSERT IGNORE para evitar conflito de chave duplicada
+      await pool.execute(
+        `INSERT IGNORE INTO patient_professional (patient_id, professional_id) VALUES (?, ?)`,
+        [patientId, professionalId],
+      );
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT * FROM patient_professional WHERE patient_id = ? AND professional_id = ? LIMIT 1",
+        [patientId, professionalId],
+      );
+      const r = rows[0]!;
+      return {
+        patientId:      r["patient_id"] as string,
+        professionalId: r["professional_id"] as string,
+        createdAt:      r["created_at"] as Date,
+      };
     },
 
-    unlink(patientId: string, professionalId: string) {
-      return prisma.patientProfessional.delete({
-        where: { patientId_professionalId: { patientId, professionalId } },
-      });
+    async unlink(patientId: string, professionalId: string): Promise<void> {
+      await pool.execute(
+        "DELETE FROM patient_professional WHERE patient_id = ? AND professional_id = ?",
+        [patientId, professionalId],
+      );
     },
 
-    replaceAll(patientId: string, professionalIds: string[]) {
-      return prisma.$transaction(async (tx) => {
-        await tx.patientProfessional.deleteMany({ where: { patientId } });
+    async replaceAll(patientId: string, professionalIds: string[]): Promise<PatientProfessional[]> {
+      return withTransaction(async (conn) => {
+        await conn.execute(
+          "DELETE FROM patient_professional WHERE patient_id = ?",
+          [patientId],
+        );
         if (professionalIds.length > 0) {
-          await tx.patientProfessional.createMany({
-            data: professionalIds.map((professionalId) => ({ patientId, professionalId })),
-          });
+          const placeholders = professionalIds.map(() => "(?, ?)").join(", ");
+          const values = professionalIds.flatMap((profId) => [patientId, profId]);
+          await conn.execute(
+            `INSERT INTO patient_professional (patient_id, professional_id) VALUES ${placeholders}`,
+            values,
+          );
         }
-        return tx.patientProfessional.findMany({
-          where: { patientId },
-          include: { professional: { select: { id: true, fullName: true, specialty: true } } },
-        });
+        const [rows] = await conn.execute<RowDataPacket[]>(
+          `SELECT pp.patient_id, pp.professional_id, pp.created_at,
+                  p.id AS prof_id, p.full_name AS prof_fullName, p.specialty AS prof_specialty
+           FROM patient_professional pp
+           JOIN professional p ON p.id = pp.professional_id
+           WHERE pp.patient_id = ?`,
+          [patientId],
+        );
+        return (rows as RowDataPacket[]).map((r) => ({
+          patientId:      r["patient_id"] as string,
+          professionalId: r["professional_id"] as string,
+          createdAt:      r["created_at"] as Date,
+          professional: {
+            id:        r["prof_id"] as string,
+            fullName:  r["prof_fullName"] as string,
+            specialty: r["prof_specialty"] as string | null,
+          },
+        }));
       });
     },
   };
