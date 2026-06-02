@@ -1,7 +1,11 @@
 import crypto from "crypto";
 import type { ClinicalEvolution } from "../../types/models";
 import type { ClinicalEvolutionRepository } from "./clinicalEvolution.repository";
-import { NotFoundError } from "../../shared/errors";
+import { NotFoundError, ForbiddenError } from "../../shared/errors";
+
+interface UserContext {
+  adminId: string;
+}
 
 export interface CreateClinicalEvolutionInput {
   appointmentId: string;
@@ -20,17 +24,19 @@ export interface UpdateClinicalEvolutionInput {
 
 export function createClinicalEvolutionService(repo: ClinicalEvolutionRepository) {
   return {
-    async getById(id: string): Promise<ClinicalEvolution> {
-      const evolution = await repo.findById(id);
+    async getById(id: string, ctx: UserContext): Promise<ClinicalEvolution> {
+      const evolution = await repo.findById(id, ctx.adminId);
       if (!evolution) throw new NotFoundError("Evolução clínica não encontrada");
       return evolution;
     },
 
-    listByAppointment(appointmentId: string): Promise<ClinicalEvolution[]> {
-      return repo.findByAppointment(appointmentId);
+    listByAppointment(appointmentId: string, ctx: UserContext): Promise<ClinicalEvolution[]> {
+      return repo.findByAppointment(appointmentId, ctx.adminId);
     },
 
-    create(data: CreateClinicalEvolutionInput): Promise<ClinicalEvolution> {
+    async create(data: CreateClinicalEvolutionInput, ctx: UserContext): Promise<ClinicalEvolution> {
+      const ok = await repo.existsAppointmentForAdmin(data.appointmentId, ctx.adminId);
+      if (!ok) throw new ForbiddenError("Acesso negado ao agendamento");
       return repo.create({
         id: crypto.randomUUID(),
         appointmentId: data.appointmentId,
@@ -41,8 +47,8 @@ export function createClinicalEvolutionService(repo: ClinicalEvolutionRepository
       });
     },
 
-    async update(id: string, data: UpdateClinicalEvolutionInput): Promise<ClinicalEvolution> {
-      const existing = await repo.findById(id);
+    async update(id: string, data: UpdateClinicalEvolutionInput, ctx: UserContext): Promise<ClinicalEvolution> {
+      const existing = await repo.findById(id, ctx.adminId);
       if (!existing) throw new NotFoundError("Evolução clínica não encontrada");
 
       const updateData: Record<string, unknown> = {};
@@ -54,8 +60,8 @@ export function createClinicalEvolutionService(repo: ClinicalEvolutionRepository
       return repo.update(id, updateData);
     },
 
-    async delete(id: string): Promise<void> {
-      const existing = await repo.findById(id);
+    async delete(id: string, ctx: UserContext): Promise<void> {
+      const existing = await repo.findById(id, ctx.adminId);
       if (!existing) throw new NotFoundError("Evolução clínica não encontrada");
       await repo.softDelete(id);
     },

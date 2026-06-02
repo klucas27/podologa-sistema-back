@@ -1,7 +1,8 @@
 import crypto from "crypto";
 import type { Appointment, AppointmentStatus } from "../../types/models";
 import type { AppointmentRepository } from "./appointment.repository";
-import { NotFoundError, ConflictError, AppError } from "../../shared/errors";
+import { NotFoundError, ConflictError, AppError, ForbiddenError } from "../../shared/errors";
+import type { PaginationInput } from "../../shared/utils/pagination";
 import { nowSP, toDateOnly, toDate, formatTimeSP } from "../../shared/utils/date";
 
 export interface CreateAppointmentInput {
@@ -44,27 +45,30 @@ export function createAppointmentService(repo: AppointmentRepository) {
   }
 
   return {
-    async getById(id: string): Promise<Appointment> {
-      const appointment = await repo.findById(id);
+    async getById(id: string, ctx: UserContext): Promise<Appointment> {
+      const appointment = await repo.findById(id, ctx.adminId);
       if (!appointment) throw new NotFoundError("Agendamento não encontrado");
       return appointment;
     },
 
-    list(ctx: UserContext): Promise<Appointment[]> {
+    list(ctx: UserContext, pg: PaginationInput) {
       if (ctx.role === "professional" && ctx.professionalId) {
-        return repo.findManyForProfessional(ctx.professionalId);
+        return repo.findManyForProfessional(ctx.professionalId, pg);
       }
-      return repo.findMany(ctx.adminId);
+      return repo.findMany(ctx.adminId, pg);
     },
 
-    listByPatient(patientId: string): Promise<Appointment[]> {
-      return repo.findByPatient(patientId);
+    listByPatient(patientId: string, ctx: UserContext): Promise<Appointment[]> {
+      return repo.findByPatient(patientId, ctx.adminId);
     },
 
-    async create(data: CreateAppointmentInput, ctx?: UserContext): Promise<Appointment> {
+    async create(data: CreateAppointmentInput, ctx: UserContext): Promise<Appointment> {
+      const ok = await repo.existsPatientForAdmin(data.patientId, ctx.adminId);
+      if (!ok) throw new ForbiddenError("Acesso negado ao paciente");
+
       const start = toDate(data.scheduledStart);
       const end = toDate(data.scheduledEnd);
-      const profId = ctx?.role === "professional" && ctx.professionalId
+      const profId = ctx.role === "professional" && ctx.professionalId
         ? ctx.professionalId
         : data.professionalId ?? null;
       await checkTimeConflict(start, end, undefined, profId);
@@ -82,11 +86,11 @@ export function createAppointmentService(repo: AppointmentRepository) {
         status: data.status ?? "scheduled",
         notes: data.notes ?? null,
         deletedAt: null,
-      });
+      }, ctx.adminId);
     },
 
-    async update(id: string, data: UpdateAppointmentInput): Promise<Appointment> {
-      const existing = await repo.findByIdRaw(id);
+    async update(id: string, data: UpdateAppointmentInput, ctx: UserContext): Promise<Appointment> {
+      const existing = await repo.findByIdRaw(id, ctx.adminId);
       if (!existing) throw new NotFoundError("Agendamento não encontrado");
 
       if (data.scheduledStart || data.scheduledEnd || data.scheduledDate || data.notes !== undefined) {
@@ -132,11 +136,11 @@ export function createAppointmentService(repo: AppointmentRepository) {
         }
       }
 
-      return repo.update(id, updateData);
+      return repo.update(id, updateData, ctx.adminId);
     },
 
-    async delete(id: string): Promise<void> {
-      const existing = await repo.findByIdRaw(id);
+    async delete(id: string, ctx: UserContext): Promise<void> {
+      const existing = await repo.findByIdRaw(id, ctx.adminId);
       if (!existing) throw new NotFoundError("Agendamento não encontrado");
       await repo.softDelete(id);
     },

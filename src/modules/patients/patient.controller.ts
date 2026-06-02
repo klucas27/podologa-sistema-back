@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { sanitizeOutput } from "../../shared/utils/sanitize";
+import { paginationSchema } from "../../shared/utils/pagination";
 import type { createPatientService } from "./patient.service";
 
 type PatientService = ReturnType<typeof createPatientService>;
@@ -17,8 +18,9 @@ export function createPatientController(service: PatientService) {
     async list(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const search = (req.query["search"] as string) || undefined;
-        const patients = await service.list(req.user!, search);
-        res.status(200).json({ status: "ok", data: sanitizeOutput(patients) });
+        const pg = paginationSchema.parse(req.query);
+        const result = await service.list(req.user!, search, pg);
+        res.status(200).json({ status: "ok", ...sanitizeOutput(result) });
       } catch (err) { next(err); }
     },
 

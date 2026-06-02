@@ -2,6 +2,8 @@ import type { RowDataPacket } from "mysql2";
 import { pool, withTransaction } from "../../infra/database";
 import { mapRow } from "../../infra/database/helpers";
 import type { Patient, Anamnesis } from "../../types/models";
+import { buildPagination, paginatedResult } from "../../shared/utils/pagination";
+import type { PaginationInput, PaginatedResult } from "../../shared/utils/pagination";
 
 // ── Helpers locais ──────────────────────────────────────────────────────────
 
@@ -79,35 +81,48 @@ export function createPatientRepository() {
       return rows[0] ? rowToPatient(rows[0]) : null;
     },
 
-    async findMany(adminId: string, search?: string) {
-      const params: (string | number)[] = [adminId];
+    async findMany(adminId: string, search: string | undefined, pg: PaginationInput): Promise<PaginatedResult<Patient>> {
+      const { limit, offset } = buildPagination(pg);
+      const base = "FROM patient p WHERE p.admin_id = ?";
+      const searchParams: (string | number)[] = [];
       let extra = "";
       if (search) {
         extra = " AND (p.full_name LIKE ? OR p.phone_number LIKE ?)";
-        params.push(`%${search}%`, `%${search}%`);
+        searchParams.push(`%${search}%`, `%${search}%`);
       }
-      const [rows] = await pool.execute<RowDataPacket[]>(
-        `SELECT * FROM patient p WHERE p.admin_id = ?${extra} ORDER BY p.full_name ASC`,
-        params,
+      const [[countRow]] = await pool.execute<RowDataPacket[]>(
+        `SELECT COUNT(*) AS total ${base}${extra}`,
+        [adminId, ...searchParams],
       );
-      return attachAnamneses(rows.map(rowToPatient));
+      const total = (countRow as RowDataPacket)["total"] as number;
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT * ${base}${extra} ORDER BY p.full_name ASC LIMIT ? OFFSET ?`,
+        [adminId, ...searchParams, limit, offset],
+      );
+      const data = await attachAnamneses(rows.map(rowToPatient));
+      return paginatedResult(data, total, pg);
     },
 
-    async findManyForProfessional(professionalId: string, search?: string) {
-      const params: (string | number)[] = [professionalId];
+    async findManyForProfessional(professionalId: string, search: string | undefined, pg: PaginationInput): Promise<PaginatedResult<Patient>> {
+      const { limit, offset } = buildPagination(pg);
+      const base = "FROM patient p JOIN patient_professional pp ON pp.patient_id = p.id WHERE pp.professional_id = ?";
+      const searchParams: (string | number)[] = [];
       let extra = "";
       if (search) {
         extra = " AND (p.full_name LIKE ? OR p.phone_number LIKE ?)";
-        params.push(`%${search}%`, `%${search}%`);
+        searchParams.push(`%${search}%`, `%${search}%`);
       }
-      const [rows] = await pool.execute<RowDataPacket[]>(
-        `SELECT p.* FROM patient p
-         JOIN patient_professional pp ON pp.patient_id = p.id
-         WHERE pp.professional_id = ?${extra}
-         ORDER BY p.full_name ASC`,
-        params,
+      const [[countRow]] = await pool.execute<RowDataPacket[]>(
+        `SELECT COUNT(*) AS total ${base}${extra}`,
+        [professionalId, ...searchParams],
       );
-      return attachAnamneses(rows.map(rowToPatient));
+      const total = (countRow as RowDataPacket)["total"] as number;
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT p.* ${base}${extra} ORDER BY p.full_name ASC LIMIT ? OFFSET ?`,
+        [professionalId, ...searchParams, limit, offset],
+      );
+      const data = await attachAnamneses(rows.map(rowToPatient));
+      return paginatedResult(data, total, pg);
     },
 
     async create(data: Omit<Patient, "_count" | "anamneses" | "createdAt" | "updatedAt">): Promise<Patient> {

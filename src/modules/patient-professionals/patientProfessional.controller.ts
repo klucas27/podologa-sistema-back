@@ -5,7 +5,7 @@ export function createPatientProfessionalController(service: PatientProfessional
   return {
     async list(req: Request, res: Response, next: NextFunction) {
       try {
-        const links = await service.listByPatient(req.params.patientId as string);
+        const links = await service.listByPatient(req.params.patientId as string, req.user!);
         res.json(links);
       } catch (err) {
         next(err);
@@ -14,7 +14,7 @@ export function createPatientProfessionalController(service: PatientProfessional
 
     async link(req: Request, res: Response, next: NextFunction) {
       try {
-        const result = await service.link(req.params.patientId as string, req.body.professionalId);
+        const result = await service.link(req.params.patientId as string, req.body.professionalId, req.user!);
         res.status(201).json(result);
       } catch (err) {
         next(err);
@@ -23,7 +23,7 @@ export function createPatientProfessionalController(service: PatientProfessional
 
     async unlink(req: Request, res: Response, next: NextFunction) {
       try {
-        await service.unlink(req.params.patientId as string, req.params.professionalId as string);
+        await service.unlink(req.params.patientId as string, req.params.professionalId as string, req.user!);
         res.status(204).send();
       } catch (err) {
         next(err);
@@ -32,7 +32,7 @@ export function createPatientProfessionalController(service: PatientProfessional
 
     async replaceAll(req: Request, res: Response, next: NextFunction) {
       try {
-        const result = await service.replaceAll(req.params.patientId as string, req.body.professionalIds);
+        const result = await service.replaceAll(req.params.patientId as string, req.body.professionalIds, req.user!);
         res.json(result);
       } catch (err) {
         next(err);

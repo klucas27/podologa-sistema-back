@@ -65,7 +65,15 @@ export function createProfessionalService(repo: ProfessionalRepository) {
     async update(id: string, data: UpdateProfessionalInput, ctx: UserContext): Promise<Professional> {
       const existing = await repo.findById(id, ctx.adminId);
       if (!existing) throw new NotFoundError("Profissional não encontrado");
-      return repo.update(id, data as Record<string, unknown>);
+
+      const updateData: Record<string, unknown> = {};
+      if (data.fullName !== undefined) updateData["fullName"] = data.fullName;
+      if (data.specialty !== undefined) updateData["specialty"] = data.specialty;
+      if (data.phoneNumber !== undefined) updateData["phoneNumber"] = data.phoneNumber;
+      if (data.email !== undefined) updateData["email"] = data.email;
+      if (data.isActive !== undefined) updateData["isActive"] = data.isActive;
+
+      return repo.update(id, updateData);
     },
 
     async delete(id: string, ctx: UserContext): Promise<void> {

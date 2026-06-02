@@ -9,7 +9,7 @@ export function createAnamnesisController(service: AnamnesisService) {
     async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const id = req.params["id"] as string;
-        const anamnesis = await service.getById(id);
+        const anamnesis = await service.getById(id, req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(anamnesis) });
       } catch (err) { next(err); }
     },
@@ -17,14 +17,14 @@ export function createAnamnesisController(service: AnamnesisService) {
     async listByPatient(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const patientId = req.params["patientId"] as string;
-        const anamneses = await service.listByPatient(patientId);
+        const anamneses = await service.listByPatient(patientId, req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(anamneses) });
       } catch (err) { next(err); }
     },
 
     async create(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const anamnesis = await service.create(req.body);
+        const anamnesis = await service.create(req.body, req.user!);
         res.status(201).json({ status: "ok", data: sanitizeOutput(anamnesis) });
       } catch (err) { next(err); }
     },
@@ -32,7 +32,7 @@ export function createAnamnesisController(service: AnamnesisService) {
     async update(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const id = req.params["id"] as string;
-        const anamnesis = await service.update(id, req.body);
+        const anamnesis = await service.update(id, req.body, req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(anamnesis) });
       } catch (err) { next(err); }
     },
@@ -40,7 +40,7 @@ export function createAnamnesisController(service: AnamnesisService) {
     async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const id = req.params["id"] as string;
-        await service.delete(id);
+        await service.delete(id, req.user!);
         res.status(200).json({ status: "ok", message: "Anamnese removida com sucesso" });
       } catch (err) { next(err); }
     },

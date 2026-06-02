@@ -3,6 +3,8 @@ import { pool } from "../../infra/database";
 import { mapRow, buildSet } from "../../infra/database/helpers";
 import type { Billing, Appointment, Patient, Professional } from "../../types/models";
 import { nowSP } from "../../shared/utils/date";
+import { buildPagination, paginatedResult } from "../../shared/utils/pagination";
+import type { PaginationInput, PaginatedResult } from "../../shared/utils/pagination";
 
 async function rowToBillingWithAppointment(r: RowDataPacket): Promise<Billing> {
   const billing = mapRow<Billing>(r);
@@ -29,50 +31,51 @@ async function rowToBillingWithAppointment(r: RowDataPacket): Promise<Billing> {
 
 export function createBillingRepository() {
   return {
-    async findById(id: string): Promise<Billing | null> {
+    async findById(id: string, adminId: string): Promise<Billing | null> {
       const [rows] = await pool.execute<RowDataPacket[]>(
-        "SELECT * FROM billings WHERE id = ? AND deleted_at IS NULL LIMIT 1",
-        [id],
+        `SELECT b.* FROM billings b
+         JOIN appointments a ON a.id = b.appointment_id
+         JOIN patient p ON p.id = a.patient_id
+         WHERE b.id = ? AND b.deleted_at IS NULL AND p.admin_id = ? LIMIT 1`,
+        [id, adminId],
       );
       if (!rows[0]) return null;
       return rowToBillingWithAppointment(rows[0]);
     },
 
-    async findByAppointment(appointmentId: string): Promise<Billing[]> {
+    async findByAppointment(appointmentId: string, adminId: string): Promise<Billing[]> {
       const [rows] = await pool.execute<RowDataPacket[]>(
-        "SELECT * FROM billings WHERE appointment_id = ? AND deleted_at IS NULL ORDER BY created_at DESC",
-        [appointmentId],
+        `SELECT b.* FROM billings b
+         JOIN appointments a ON a.id = b.appointment_id
+         JOIN patient p ON p.id = a.patient_id
+         WHERE b.appointment_id = ? AND b.deleted_at IS NULL AND p.admin_id = ?
+         ORDER BY b.created_at DESC`,
+        [appointmentId, adminId],
       );
       return rows.map((r) => mapRow<Billing>(r));
     },
 
-    async findAll(adminId: string): Promise<Billing[]> {
+    async existsAppointmentForAdmin(appointmentId: string, adminId: string): Promise<boolean> {
       const [rows] = await pool.execute<RowDataPacket[]>(
-        `SELECT b.*,
-                a.id AS apt_id, a.patient_id AS apt_patientId, a.professional_id AS apt_professionalId,
-                a.scheduled_start AS apt_scheduledStart, a.scheduled_end AS apt_scheduledEnd,
-                a.scheduled_date AS apt_scheduledDate, a.status AS apt_status, a.notes AS apt_notes,
-                a.created_at AS apt_createdAt, a.updated_at AS apt_updatedAt,
-                p.id AS pat_id, p.full_name AS pat_fullName, p.cpf AS pat_cpf,
-                p.phone_number AS pat_phoneNumber, p.email AS pat_email,
-                p.admin_id AS pat_adminId, p.marital_status AS pat_maritalStatus,
-                p.created_at AS pat_createdAt, p.updated_at AS pat_updatedAt,
-                prof.id AS prof_id, prof.full_name AS prof_fullName, prof.specialty AS prof_specialty,
-                prof.email AS prof_email, prof.is_active AS prof_isActive,
-                prof.admin_id AS prof_adminId, prof.created_at AS prof_createdAt,
-                prof.updated_at AS prof_updatedAt
-         FROM billings b
-         JOIN appointments a ON a.id = b.appointment_id
+        `SELECT 1 FROM appointments a
          JOIN patient p ON p.id = a.patient_id
-         LEFT JOIN professional prof ON prof.id = a.professional_id
-         WHERE b.deleted_at IS NULL AND a.deleted_at IS NULL AND p.admin_id = ?
-         ORDER BY b.created_at DESC`,
-        [adminId],
+         WHERE a.id = ? AND a.deleted_at IS NULL AND p.admin_id = ? LIMIT 1`,
+        [appointmentId, adminId],
       );
-      return rows.map((r) => assembleBillingRow(r));
+      return (rows as RowDataPacket[]).length > 0;
     },
 
-    async findAllForProfessional(professionalId: string): Promise<Billing[]> {
+    async findAll(adminId: string, pg: PaginationInput): Promise<PaginatedResult<Billing>> {
+      const { limit, offset } = buildPagination(pg);
+      const baseJoin = `FROM billings b
+         JOIN appointments a ON a.id = b.appointment_id
+         JOIN patient p ON p.id = a.patient_id
+         LEFT JOIN professional prof ON prof.id = a.professional_id
+         WHERE b.deleted_at IS NULL AND a.deleted_at IS NULL AND p.admin_id = ?`;
+      const [[countRow]] = await pool.execute<RowDataPacket[]>(
+        `SELECT COUNT(*) AS total ${baseJoin}`, [adminId],
+      );
+      const total = (countRow as RowDataPacket)["total"] as number;
       const [rows] = await pool.execute<RowDataPacket[]>(
         `SELECT b.*,
                 a.id AS apt_id, a.patient_id AS apt_patientId, a.professional_id AS apt_professionalId,
@@ -87,15 +90,43 @@ export function createBillingRepository() {
                 prof.email AS prof_email, prof.is_active AS prof_isActive,
                 prof.admin_id AS prof_adminId, prof.created_at AS prof_createdAt,
                 prof.updated_at AS prof_updatedAt
-         FROM billings b
+         ${baseJoin}
+         ORDER BY b.created_at DESC LIMIT ? OFFSET ?`,
+        [adminId, limit, offset],
+      );
+      return paginatedResult(rows.map((r) => assembleBillingRow(r)), total, pg);
+    },
+
+    async findAllForProfessional(professionalId: string, pg: PaginationInput): Promise<PaginatedResult<Billing>> {
+      const { limit, offset } = buildPagination(pg);
+      const baseJoin = `FROM billings b
          JOIN appointments a ON a.id = b.appointment_id
          JOIN patient p ON p.id = a.patient_id
          LEFT JOIN professional prof ON prof.id = a.professional_id
-         WHERE b.deleted_at IS NULL AND a.deleted_at IS NULL AND a.professional_id = ?
-         ORDER BY b.created_at DESC`,
-        [professionalId],
+         WHERE b.deleted_at IS NULL AND a.deleted_at IS NULL AND a.professional_id = ?`;
+      const [[countRow]] = await pool.execute<RowDataPacket[]>(
+        `SELECT COUNT(*) AS total ${baseJoin}`, [professionalId],
       );
-      return rows.map((r) => assembleBillingRow(r));
+      const total = (countRow as RowDataPacket)["total"] as number;
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT b.*,
+                a.id AS apt_id, a.patient_id AS apt_patientId, a.professional_id AS apt_professionalId,
+                a.scheduled_start AS apt_scheduledStart, a.scheduled_end AS apt_scheduledEnd,
+                a.scheduled_date AS apt_scheduledDate, a.status AS apt_status, a.notes AS apt_notes,
+                a.created_at AS apt_createdAt, a.updated_at AS apt_updatedAt,
+                p.id AS pat_id, p.full_name AS pat_fullName, p.cpf AS pat_cpf,
+                p.phone_number AS pat_phoneNumber, p.email AS pat_email,
+                p.admin_id AS pat_adminId, p.marital_status AS pat_maritalStatus,
+                p.created_at AS pat_createdAt, p.updated_at AS pat_updatedAt,
+                prof.id AS prof_id, prof.full_name AS prof_fullName, prof.specialty AS prof_specialty,
+                prof.email AS prof_email, prof.is_active AS prof_isActive,
+                prof.admin_id AS prof_adminId, prof.created_at AS prof_createdAt,
+                prof.updated_at AS prof_updatedAt
+         ${baseJoin}
+         ORDER BY b.created_at DESC LIMIT ? OFFSET ?`,
+        [professionalId, limit, offset],
+      );
+      return paginatedResult(rows.map((r) => assembleBillingRow(r)), total, pg);
     },
 
     async create(data: Omit<Billing, "createdAt" | "updatedAt" | "appointment">): Promise<Billing> {

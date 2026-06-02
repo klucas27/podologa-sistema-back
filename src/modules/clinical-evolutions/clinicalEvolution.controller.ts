@@ -9,7 +9,7 @@ export function createClinicalEvolutionController(service: ClinicalEvolutionServ
     async findById(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const id = req.params["id"] as string;
-        const evolution = await service.getById(id);
+        const evolution = await service.getById(id, req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(evolution) });
       } catch (err) { next(err); }
     },
@@ -17,14 +17,14 @@ export function createClinicalEvolutionController(service: ClinicalEvolutionServ
     async listByAppointment(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const appointmentId = req.params["appointmentId"] as string;
-        const evolutions = await service.listByAppointment(appointmentId);
+        const evolutions = await service.listByAppointment(appointmentId, req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(evolutions) });
       } catch (err) { next(err); }
     },
 
     async create(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const evolution = await service.create(req.body);
+        const evolution = await service.create(req.body, req.user!);
         res.status(201).json({ status: "ok", data: sanitizeOutput(evolution) });
       } catch (err) { next(err); }
     },
@@ -32,7 +32,7 @@ export function createClinicalEvolutionController(service: ClinicalEvolutionServ
     async update(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const id = req.params["id"] as string;
-        const evolution = await service.update(id, req.body);
+        const evolution = await service.update(id, req.body, req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(evolution) });
       } catch (err) { next(err); }
     },
@@ -40,7 +40,7 @@ export function createClinicalEvolutionController(service: ClinicalEvolutionServ
     async delete(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const id = req.params["id"] as string;
-        await service.delete(id);
+        await service.delete(id, req.user!);
         res.status(200).json({ status: "ok", message: "Evolução clínica removida com sucesso" });
       } catch (err) { next(err); }
     },

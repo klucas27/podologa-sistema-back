@@ -3,6 +3,8 @@ import { pool } from "../../infra/database";
 import { mapRow, buildSet } from "../../infra/database/helpers";
 import type { Appointment, Patient, Anamnesis, ClinicalEvolution, EvolutionPathology, Pathology, Professional } from "../../types/models";
 import { nowSP } from "../../shared/utils/date";
+import { buildPagination, paginatedResult } from "../../shared/utils/pagination";
+import type { PaginationInput, PaginatedResult } from "../../shared/utils/pagination";
 
 // ── Helpers locais ──────────────────────────────────────────────────────────
 
@@ -10,10 +12,12 @@ function rowToAppointment(r: RowDataPacket): Appointment {
   return mapRow<Appointment>(r);
 }
 
-async function fetchWithRelations(id: string): Promise<Appointment | null> {
+async function fetchWithRelations(id: string, adminId: string): Promise<Appointment | null> {
   const [aptRows] = await pool.execute<RowDataPacket[]>(
-    "SELECT * FROM appointments WHERE id = ? AND deleted_at IS NULL LIMIT 1",
-    [id],
+    `SELECT a.* FROM appointments a
+     JOIN patient p ON p.id = a.patient_id
+     WHERE a.id = ? AND a.deleted_at IS NULL AND p.admin_id = ? LIMIT 1`,
+    [id, adminId],
   );
   if (!aptRows[0]) return null;
   const apt = rowToAppointment(aptRows[0]);
@@ -141,14 +145,16 @@ async function buildListRows(aptRows: RowDataPacket[]): Promise<Appointment[]> {
 
 export function createAppointmentRepository() {
   return {
-    findById(id: string): Promise<Appointment | null> {
-      return fetchWithRelations(id);
+    findById(id: string, adminId: string): Promise<Appointment | null> {
+      return fetchWithRelations(id, adminId);
     },
 
-    async findByIdRaw(id: string): Promise<Appointment | null> {
+    async findByIdRaw(id: string, adminId: string): Promise<Appointment | null> {
       const [rows] = await pool.execute<RowDataPacket[]>(
-        "SELECT * FROM appointments WHERE id = ? AND deleted_at IS NULL LIMIT 1",
-        [id],
+        `SELECT a.* FROM appointments a
+         JOIN patient p ON p.id = a.patient_id
+         WHERE a.id = ? AND a.deleted_at IS NULL AND p.admin_id = ? LIMIT 1`,
+        [id, adminId],
       );
       return rows[0] ? rowToAppointment(rows[0]) : null;
     },
@@ -180,33 +186,41 @@ export function createAppointmentRepository() {
       return apt;
     },
 
-    async findMany(adminId: string): Promise<Appointment[]> {
+    async findMany(adminId: string, pg: PaginationInput): Promise<PaginatedResult<Appointment>> {
+      const { limit, offset } = buildPagination(pg);
+      const base = "FROM appointments a JOIN patient p ON p.id = a.patient_id WHERE a.deleted_at IS NULL AND p.admin_id = ?";
+      const [[countRow]] = await pool.execute<RowDataPacket[]>(
+        `SELECT COUNT(*) AS total ${base}`, [adminId],
+      );
+      const total = (countRow as RowDataPacket)["total"] as number;
       const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT a.* ${base} ORDER BY a.scheduled_date DESC LIMIT ? OFFSET ?`,
+        [adminId, limit, offset],
+      );
+      return paginatedResult(await buildListRows(rows), total, pg);
+    },
+
+    async findManyForProfessional(professionalId: string, pg: PaginationInput): Promise<PaginatedResult<Appointment>> {
+      const { limit, offset } = buildPagination(pg);
+      const base = "FROM appointments WHERE deleted_at IS NULL AND professional_id = ?";
+      const [[countRow]] = await pool.execute<RowDataPacket[]>(
+        `SELECT COUNT(*) AS total ${base}`, [professionalId],
+      );
+      const total = (countRow as RowDataPacket)["total"] as number;
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT * ${base} ORDER BY scheduled_date DESC LIMIT ? OFFSET ?`,
+        [professionalId, limit, offset],
+      );
+      return paginatedResult(await buildListRows(rows), total, pg);
+    },
+
+    async findByPatient(patientId: string, adminId: string): Promise<Appointment[]> {
+      const [aptRows] = await pool.execute<RowDataPacket[]>(
         `SELECT a.* FROM appointments a
          JOIN patient p ON p.id = a.patient_id
-         WHERE a.deleted_at IS NULL AND p.admin_id = ?
+         WHERE a.patient_id = ? AND a.deleted_at IS NULL AND p.admin_id = ?
          ORDER BY a.scheduled_date DESC`,
-        [adminId],
-      );
-      return buildListRows(rows);
-    },
-
-    async findManyForProfessional(professionalId: string): Promise<Appointment[]> {
-      const [rows] = await pool.execute<RowDataPacket[]>(
-        `SELECT * FROM appointments
-         WHERE deleted_at IS NULL AND professional_id = ?
-         ORDER BY scheduled_date DESC`,
-        [professionalId],
-      );
-      return buildListRows(rows);
-    },
-
-    async findByPatient(patientId: string): Promise<Appointment[]> {
-      const [aptRows] = await pool.execute<RowDataPacket[]>(
-        `SELECT * FROM appointments
-         WHERE patient_id = ? AND deleted_at IS NULL
-         ORDER BY scheduled_date DESC`,
-        [patientId],
+        [patientId, adminId],
       );
       if (!aptRows.length) return [];
       const apts = aptRows.map(rowToAppointment);
@@ -271,7 +285,18 @@ export function createAppointmentRepository() {
       return base.map((a) => ({ ...a, clinicalEvolutions: evoMap.get(a.id) ?? [] }));
     },
 
-    async create(data: Omit<Appointment, "createdAt" | "updatedAt" | "patient" | "user" | "professional" | "clinicalEvolutions" | "billings">): Promise<Appointment> {
+    async existsPatientForAdmin(patientId: string, adminId: string): Promise<boolean> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT id FROM patient WHERE id = ? AND admin_id = ? LIMIT 1",
+        [patientId, adminId],
+      );
+      return (rows as RowDataPacket[]).length > 0;
+    },
+
+    async create(
+      data: Omit<Appointment, "createdAt" | "updatedAt" | "patient" | "user" | "professional" | "clinicalEvolutions" | "billings">,
+      adminId: string,
+    ): Promise<Appointment> {
       await pool.execute(
         `INSERT INTO appointments
            (id, patient_id, user_id, professional_id,
@@ -285,10 +310,10 @@ export function createAppointmentRepository() {
           data.status, data.notes ?? null, data.deletedAt ?? null,
         ],
       );
-      return (await fetchWithRelations(data.id))!;
+      return (await fetchWithRelations(data.id, adminId))!;
     },
 
-    async update(id: string, data: Record<string, unknown>): Promise<Appointment> {
+    async update(id: string, data: Record<string, unknown>, adminId: string): Promise<Appointment> {
       const { clause, values } = buildSet(data);
       if (clause) {
         await pool.execute(
@@ -296,7 +321,7 @@ export function createAppointmentRepository() {
           [...values, id],
         );
       }
-      return (await fetchWithRelations(id))!;
+      return (await fetchWithRelations(id, adminId))!;
     },
 
     async softDelete(id: string): Promise<Appointment> {

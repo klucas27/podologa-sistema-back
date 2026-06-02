@@ -4,6 +4,22 @@ import type { PatientProfessional } from "../../types/models";
 
 export function createPatientProfessionalRepository() {
   return {
+    async existsPatientForAdmin(patientId: string, adminId: string): Promise<boolean> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT id FROM patient WHERE id = ? AND admin_id = ? LIMIT 1",
+        [patientId, adminId],
+      );
+      return (rows as RowDataPacket[]).length > 0;
+    },
+
+    async existsProfessionalForAdmin(professionalId: string, adminId: string): Promise<boolean> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT id FROM professional WHERE id = ? AND admin_id = ? LIMIT 1",
+        [professionalId, adminId],
+      );
+      return (rows as RowDataPacket[]).length > 0;
+    },
+
     async findByPatient(patientId: string): Promise<PatientProfessional[]> {
       const [rows] = await pool.execute<RowDataPacket[]>(
         `SELECT pp.patient_id, pp.professional_id, pp.created_at,

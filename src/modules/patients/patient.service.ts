@@ -2,6 +2,7 @@ import crypto from "crypto";
 import type { Patient, MaritalStatus } from "../../types/models";
 import type { PatientRepository } from "./patient.repository";
 import { NotFoundError } from "../../shared/errors";
+import type { PaginationInput } from "../../shared/utils/pagination";
 import { toDateOnly } from "../../shared/utils/date";
 
 export interface CreatePatientInput {
@@ -43,11 +44,11 @@ export function createPatientService(repo: PatientRepository) {
       return findPatient(id, ctx);
     },
 
-    list(ctx: UserContext, search?: string) {
+    list(ctx: UserContext, search: string | undefined, pg: PaginationInput) {
       if (ctx.role === "professional" && ctx.professionalId) {
-        return repo.findManyForProfessional(ctx.professionalId, search);
+        return repo.findManyForProfessional(ctx.professionalId, search, pg);
       }
-      return repo.findMany(ctx.adminId, search);
+      return repo.findMany(ctx.adminId, search, pg);
     },
 
     create(data: CreatePatientInput, ctx: UserContext) {

@@ -12,7 +12,7 @@ export function createEvolutionPathologyController(service: EvolutionPathologySe
         const evolutionId = req.params["evolutionId"] as string;
         const pathologyId = req.params["pathologyId"] as string;
         const bodyPart = req.params["bodyPart"] as BodyPart;
-        const record = await service.getByKey({ evolutionId, pathologyId, bodyPart });
+        const record = await service.getByKey({ evolutionId, pathologyId, bodyPart }, req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(record) });
       } catch (err) { next(err); }
     },
@@ -20,14 +20,14 @@ export function createEvolutionPathologyController(service: EvolutionPathologySe
     async listByEvolution(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const evolutionId = req.params["evolutionId"] as string;
-        const records = await service.listByEvolution(evolutionId);
+        const records = await service.listByEvolution(evolutionId, req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(records) });
       } catch (err) { next(err); }
     },
 
     async create(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const record = await service.create(req.body);
+        const record = await service.create(req.body, req.user!);
         res.status(201).json({ status: "ok", data: sanitizeOutput(record) });
       } catch (err) { next(err); }
     },
@@ -37,7 +37,7 @@ export function createEvolutionPathologyController(service: EvolutionPathologySe
         const evolutionId = req.params["evolutionId"] as string;
         const pathologyId = req.params["pathologyId"] as string;
         const bodyPart = req.params["bodyPart"] as BodyPart;
-        const record = await service.update({ evolutionId, pathologyId, bodyPart }, req.body);
+        const record = await service.update({ evolutionId, pathologyId, bodyPart }, req.body, req.user!);
         res.status(200).json({ status: "ok", data: sanitizeOutput(record) });
       } catch (err) { next(err); }
     },
@@ -47,7 +47,7 @@ export function createEvolutionPathologyController(service: EvolutionPathologySe
         const evolutionId = req.params["evolutionId"] as string;
         const pathologyId = req.params["pathologyId"] as string;
         const bodyPart = req.params["bodyPart"] as BodyPart;
-        await service.delete({ evolutionId, pathologyId, bodyPart });
+        await service.delete({ evolutionId, pathologyId, bodyPart }, req.user!);
         res.status(200).json({ status: "ok", message: "Registro removido com sucesso" });
       } catch (err) { next(err); }
     },

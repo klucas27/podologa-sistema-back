@@ -5,7 +5,6 @@ import crypto from "crypto";
 import type { AuthRepository } from "./auth.repository";
 import type { Env } from "../../config/env";
 import { AuthError, ConflictError } from "../../shared/errors";
-import { nowSP } from "../../shared/utils/date";
 
 interface TokenPayload {
   userId: string;
@@ -51,7 +50,7 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
 
   async function persistRefreshToken(userId: string, rawToken: string): Promise<void> {
     const tokenHash = hashToken(rawToken);
-    const expiresAt = new Date(nowSP().getTime() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await repo.createRefreshToken({
       id: crypto.randomUUID(),
       userId,
@@ -156,7 +155,7 @@ export function createAuthService(repo: AuthRepository, envConfig: Env) {
         throw new AuthError("Refresh token inválido ou expirado. Faça login novamente.");
       }
 
-      if (stored.expiresAt < nowSP()) {
+      if (stored.expiresAt < new Date()) {
         throw new AuthError("Refresh token expirado");
       }
 

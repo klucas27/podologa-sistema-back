@@ -1,6 +1,10 @@
 import type { EvolutionPathology, BodyPart } from "../../types/models";
 import type { EvolutionPathologyRepository, EvolutionPathologyKey } from "./evolutionPathology.repository";
-import { NotFoundError } from "../../shared/errors";
+import { NotFoundError, ForbiddenError } from "../../shared/errors";
+
+interface UserContext {
+  adminId: string;
+}
 
 export interface CreateEvolutionPathologyInput {
   evolutionId: string;
@@ -15,17 +19,19 @@ export interface UpdateEvolutionPathologyInput {
 
 export function createEvolutionPathologyService(repo: EvolutionPathologyRepository) {
   return {
-    async getByKey(key: EvolutionPathologyKey): Promise<EvolutionPathology> {
-      const record = await repo.findByKey(key);
+    async getByKey(key: EvolutionPathologyKey, ctx: UserContext): Promise<EvolutionPathology> {
+      const record = await repo.findByKey(key, ctx.adminId);
       if (!record) throw new NotFoundError("Registro não encontrado");
       return record;
     },
 
-    listByEvolution(evolutionId: string): Promise<EvolutionPathology[]> {
-      return repo.findByEvolution(evolutionId);
+    listByEvolution(evolutionId: string, ctx: UserContext): Promise<EvolutionPathology[]> {
+      return repo.findByEvolution(evolutionId, ctx.adminId);
     },
 
-    create(data: CreateEvolutionPathologyInput): Promise<EvolutionPathology> {
+    async create(data: CreateEvolutionPathologyInput, ctx: UserContext): Promise<EvolutionPathology> {
+      const ok = await repo.existsEvolutionForAdmin(data.evolutionId, ctx.adminId);
+      if (!ok) throw new ForbiddenError("Acesso negado à evolução clínica");
       return repo.create({
         evolutionId: data.evolutionId,
         pathologyId: data.pathologyId,
@@ -34,8 +40,8 @@ export function createEvolutionPathologyService(repo: EvolutionPathologyReposito
       });
     },
 
-    async update(key: EvolutionPathologyKey, data: UpdateEvolutionPathologyInput): Promise<EvolutionPathology> {
-      const existing = await repo.findByKey(key);
+    async update(key: EvolutionPathologyKey, data: UpdateEvolutionPathologyInput, ctx: UserContext): Promise<EvolutionPathology> {
+      const existing = await repo.findByKey(key, ctx.adminId);
       if (!existing) throw new NotFoundError("Registro não encontrado");
 
       const updateData: Record<string, unknown> = {};
@@ -44,8 +50,8 @@ export function createEvolutionPathologyService(repo: EvolutionPathologyReposito
       return repo.update(key, updateData);
     },
 
-    async delete(key: EvolutionPathologyKey): Promise<void> {
-      const existing = await repo.findByKey(key);
+    async delete(key: EvolutionPathologyKey, ctx: UserContext): Promise<void> {
+      const existing = await repo.findByKey(key, ctx.adminId);
       if (!existing) throw new NotFoundError("Registro não encontrado");
       await repo.delete(key);
     },

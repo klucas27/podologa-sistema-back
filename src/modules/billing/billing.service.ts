@@ -1,7 +1,14 @@
 import crypto from "crypto";
 import type { Billing, PaymentMethod, BillingStatus } from "../../types/models";
 import type { BillingRepository } from "./billing.repository";
-import { NotFoundError } from "../../shared/errors";
+import { NotFoundError, ForbiddenError } from "../../shared/errors";
+import type { PaginationInput } from "../../shared/utils/pagination";
+
+interface UserContext {
+  role: "admin" | "professional";
+  professionalId: string | null;
+  adminId: string;
+}
 import { nowSP, toDate } from "../../shared/utils/date";
 
 export interface CreateBillingInput {
@@ -21,24 +28,27 @@ export interface UpdateBillingInput {
 
 export function createBillingService(repo: BillingRepository) {
   return {
-    async getById(id: string): Promise<Billing> {
-      const billing = await repo.findById(id);
+    async getById(id: string, ctx: UserContext): Promise<Billing> {
+      const billing = await repo.findById(id, ctx.adminId);
       if (!billing) throw new NotFoundError("Cobrança não encontrada");
       return billing;
     },
 
-    listByAppointment(appointmentId: string): Promise<Billing[]> {
-      return repo.findByAppointment(appointmentId);
+    listByAppointment(appointmentId: string, ctx: UserContext): Promise<Billing[]> {
+      return repo.findByAppointment(appointmentId, ctx.adminId);
     },
 
-    listAll(ctx: { role: "admin" | "professional"; professionalId: string | null; adminId: string }): Promise<Billing[]> {
+    listAll(ctx: UserContext, pg: PaginationInput) {
       if (ctx.role === "professional" && ctx.professionalId) {
-        return repo.findAllForProfessional(ctx.professionalId);
+        return repo.findAllForProfessional(ctx.professionalId, pg);
       }
-      return repo.findAll(ctx.adminId);
+      return repo.findAll(ctx.adminId, pg);
     },
 
-    create(data: CreateBillingInput): Promise<Billing> {
+    async create(data: CreateBillingInput, ctx: UserContext): Promise<Billing> {
+      const ok = await repo.existsAppointmentForAdmin(data.appointmentId, ctx.adminId);
+      if (!ok) throw new ForbiddenError("Acesso negado ao agendamento");
+
       const status = data.status ?? "pending";
       const paidAt = data.paidAt
         ? toDate(data.paidAt)
@@ -57,8 +67,8 @@ export function createBillingService(repo: BillingRepository) {
       });
     },
 
-    async update(id: string, data: UpdateBillingInput): Promise<Billing> {
-      const existing = await repo.findById(id);
+    async update(id: string, data: UpdateBillingInput, ctx: UserContext): Promise<Billing> {
+      const existing = await repo.findById(id, ctx.adminId);
       if (!existing) throw new NotFoundError("Cobrança não encontrada");
 
       const updateData: Record<string, unknown> = {};
@@ -74,8 +84,8 @@ export function createBillingService(repo: BillingRepository) {
       return repo.update(id, updateData);
     },
 
-    async delete(id: string): Promise<void> {
-      const existing = await repo.findById(id);
+    async delete(id: string, ctx: UserContext): Promise<void> {
+      const existing = await repo.findById(id, ctx.adminId);
       if (!existing) throw new NotFoundError("Cobrança não encontrada");
       await repo.softDelete(id);
     },

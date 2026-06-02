@@ -42,7 +42,10 @@ echo "[2/3] Desempacotando $ZIP..."
 unzip -q -o "$ZIP"
 rm -f "$ZIP"
 
-echo "[3/3] Verificando estrutura..."
+echo "[3/3] Instalando dependencias de producao..."
+npm ci --omit=dev
+
+echo "[4/4] Verificando estrutura..."
 for item in dist node_modules package.json .env; do
     if [ -e "$item" ]; then
         echo "  OK: $item"
@@ -55,6 +58,16 @@ echo ""
 echo "============================================"
 echo " Deploy concluido!"
 echo " Reinicie o app no painel do AlwaysData."
+echo ""
+echo " IMPORTANTE — Timezone:"
+echo "  O script 'start' do package.json ja inclui TZ=UTC."
+echo "  Confirme que o AlwaysData executa 'npm start' (ou"
+echo "  'TZ=UTC node dist/index.js') como comando de inicializacao."
+echo ""
+echo " NOTA — Topologia:"
+echo "  Deploy AlwaysData same-origin (front + back no mesmo host)."
+echo "  O podologa-sistema-front/vercel.json (Vercel+Render) nao se"
+echo "  aplica aqui — ignore-o ou remova-o nesta topologia."
 echo "============================================"
 """
 
@@ -105,9 +118,6 @@ def package() -> None:
     print("  Adicionando dist/ ...")
     with zipfile.ZipFile(DEPLOY_ZIP, "w", zipfile.ZIP_DEFLATED) as zf:
         add_dir_to_zip(zf, BACK_DIR / "dist", "dist")
-
-        print("  Adicionando node_modules/ (pode demorar)...")
-        add_dir_to_zip(zf, BACK_DIR / "node_modules", "node_modules")
 
         print("  Adicionando package.json, package-lock.json e .env...")
         for rel in ["package.json", "package-lock.json", ".env"]:

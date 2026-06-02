@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { RequestHandler } from "express";
 import type { AuthController } from "./auth.controller";
 import { authMiddleware } from "../../middlewares/auth.middleware";
 import { doubleCsrfProtection } from "../../middlewares/csrf.middleware";
@@ -9,12 +10,41 @@ import {
   changePasswordSchema,
   updateWorkingHoursSchema,
 } from "./auth.schema";
+import type { Env } from "../../config/env";
 
-export function createAuthRoutes(ctrl: AuthController): Router {
+export function createAuthRoutes(ctrl: AuthController, envConfig: Env): Router {
   const router = Router();
 
-  router.post("/login", loginLimiter, validate({ body: loginSchema }), ctrl.login);
-  router.post("/register", loginLimiter, validate({ body: registerSchema }), ctrl.register);
+  router.get("/registration-status", (_req, res) => {
+    res
+      .status(200)
+      .json({
+        status: "ok",
+        data: { enabled: envConfig.REGISTRATION_ENABLED },
+      });
+  });
+
+  const registrationGuard: RequestHandler = (_req, res, next) => {
+    if (!envConfig.REGISTRATION_ENABLED) {
+      res.status(403).json({ message: "Registro desabilitado neste ambiente" });
+      return;
+    }
+    next();
+  };
+
+  router.post(
+    "/login",
+    loginLimiter,
+    validate({ body: loginSchema }),
+    ctrl.login,
+  );
+  router.post(
+    "/register",
+    registrationGuard,
+    loginLimiter,
+    validate({ body: registerSchema }),
+    ctrl.register,
+  );
   router.post("/refresh", loginLimiter, ctrl.refresh);
   router.post("/logout", ctrl.logout);
 

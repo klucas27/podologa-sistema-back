@@ -1,3 +1,10 @@
+-- ============================================================
+-- ATENÇÃO — FONTE DUPLICADA (B1)
+-- Este arquivo está fora de sincronização com migrate.ts.
+-- A fonte de verdade do schema é: src/infra/database/migrate.ts
+-- Este arquivo pode ser removido ou usado apenas como referência.
+-- ============================================================
+
 -- PodoSistem — MySQL Schema
 -- Run once on a fresh database (alwaysdata or any MySQL 8+)
 -- Safe to re-run: all statements use IF NOT EXISTS / IF EXISTS

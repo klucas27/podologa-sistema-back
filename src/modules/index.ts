@@ -76,7 +76,7 @@ import { createPatientProfessionalRepository, createPatientProfessionalService, 
 const authRepo = createAuthRepository();
 const authService = createAuthService(authRepo, env);
 const authCtrl = createAuthController(authService, env);
-const authRoutes = createAuthRoutes(authCtrl);
+const authRoutes = createAuthRoutes(authCtrl, env);
 
 // Patient
 const patientRepo = createPatientRepository();

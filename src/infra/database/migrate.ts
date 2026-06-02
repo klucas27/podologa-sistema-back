@@ -1,12 +1,10 @@
 import { pool } from "./db";
+import type { RowDataPacket } from "mysql2";
+import type { PoolConnection } from "mysql2/promise";
 import type { Logger } from "pino";
 
-// Tables must be created in FK-dependency order.
-// professional → user → patient → appointments → clinical_evolutions
-// → pathologies → evolution_pathologies → billings → anamnesis
-// → refresh_token → patient_professional
-
-const DDL_STATEMENTS = [
+// ── Tabelas base (v1) ─────────────────────────────────────────────────────────
+const V1_DDL: string[] = [
   `CREATE TABLE IF NOT EXISTS \`professional\` (
     id VARCHAR(36) NOT NULL PRIMARY KEY,
     admin_id VARCHAR(36) NOT NULL,
@@ -218,16 +216,95 @@ const DDL_STATEMENTS = [
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 ];
 
+// ── Helper: adiciona índice somente se não existir ────────────────────────────
+async function addIndexIfMissing(
+  conn: PoolConnection,
+  table: string,
+  indexName: string,
+  columnDef: string,
+): Promise<void> {
+  const [rows] = await conn.execute<RowDataPacket[]>(
+    `SELECT COUNT(*) AS cnt FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+    [table, indexName],
+  );
+  if ((rows[0] as RowDataPacket)["cnt"] === 0) {
+    await conn.execute(`ALTER TABLE \`${table}\` ADD INDEX \`${indexName}\` ${columnDef}`);
+  }
+}
+
+// ── Definição das migrations ──────────────────────────────────────────────────
+type Migration = {
+  version: number;
+  description: string;
+  up: (conn: PoolConnection) => Promise<void>;
+};
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    description: "Create all initial tables",
+    async up(conn) {
+      for (const ddl of V1_DDL) {
+        await conn.execute(ddl);
+      }
+    },
+  },
+  {
+    version: 2,
+    description: "Add dashboard query indexes (paid_at, patient.created_at, anamnesis compound)",
+    async up(conn) {
+      await addIndexIfMissing(conn, "billings", "idx_billings_paid_at", "(paid_at)");
+      await addIndexIfMissing(conn, "patient", "idx_patient_created_at", "(created_at)");
+      await addIndexIfMissing(conn, "anamnesis", "idx_anamnesis_patient_created", "(patient_id, created_at)");
+    },
+  },
+];
+
+// ── Runner ────────────────────────────────────────────────────────────────────
 export async function runMigrations(log: Logger): Promise<void> {
   const conn = await pool.getConnection();
   try {
-    for (const ddl of DDL_STATEMENTS) {
-      await conn.execute(ddl);
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS \`schema_migrations\` (
+        version     INT          NOT NULL PRIMARY KEY,
+        description VARCHAR(255) NOT NULL DEFAULT '',
+        applied_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    const [appliedRows] = await conn.execute<RowDataPacket[]>(
+      "SELECT version FROM schema_migrations ORDER BY version ASC",
+    );
+    const applied = new Set(appliedRows.map((r) => r["version"] as number));
+
+    let ran = 0;
+    for (const migration of MIGRATIONS) {
+      if (applied.has(migration.version)) continue;
+
+      log.info(`Applying migration v${migration.version}: ${migration.description}`);
+      await conn.beginTransaction();
+      try {
+        await migration.up(conn);
+        await conn.execute(
+          "INSERT INTO schema_migrations (version, description) VALUES (?, ?)",
+          [migration.version, migration.description],
+        );
+        await conn.commit();
+        ran++;
+        log.info(`Migration v${migration.version} applied successfully`);
+      } catch (err) {
+        await conn.rollback();
+        log.error({ err, version: migration.version }, "Migration failed — rolling back");
+        throw err;
+      }
     }
-    log.info("Database tables verified/created successfully");
-  } catch (err) {
-    log.error({ err }, "Failed to initialize database tables");
-    throw err;
+
+    if (ran === 0) {
+      log.info("Database schema is up to date");
+    } else {
+      log.info({ ran }, "All pending migrations applied");
+    }
   } finally {
     conn.release();
   }

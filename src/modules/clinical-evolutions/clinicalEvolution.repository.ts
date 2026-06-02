@@ -24,22 +24,39 @@ async function attachPathologies(evolutions: ClinicalEvolution[]): Promise<Clini
 
 export function createClinicalEvolutionRepository() {
   return {
-    async findById(id: string): Promise<ClinicalEvolution | null> {
+    async findById(id: string, adminId: string): Promise<ClinicalEvolution | null> {
       const [rows] = await pool.execute<RowDataPacket[]>(
-        "SELECT * FROM clinical_evolutions WHERE id = ? AND deleted_at IS NULL LIMIT 1",
-        [id],
+        `SELECT ce.* FROM clinical_evolutions ce
+         JOIN appointments a ON a.id = ce.appointment_id
+         JOIN patient p ON p.id = a.patient_id
+         WHERE ce.id = ? AND ce.deleted_at IS NULL AND p.admin_id = ? LIMIT 1`,
+        [id, adminId],
       );
       if (!rows[0]) return null;
       const [evo] = await attachPathologies([mapRow<ClinicalEvolution>(rows[0])]);
       return evo ?? null;
     },
 
-    async findByAppointment(appointmentId: string): Promise<ClinicalEvolution[]> {
+    async findByAppointment(appointmentId: string, adminId: string): Promise<ClinicalEvolution[]> {
       const [rows] = await pool.execute<RowDataPacket[]>(
-        "SELECT * FROM clinical_evolutions WHERE appointment_id = ? AND deleted_at IS NULL ORDER BY created_at DESC",
-        [appointmentId],
+        `SELECT ce.* FROM clinical_evolutions ce
+         JOIN appointments a ON a.id = ce.appointment_id
+         JOIN patient p ON p.id = a.patient_id
+         WHERE ce.appointment_id = ? AND ce.deleted_at IS NULL AND p.admin_id = ?
+         ORDER BY ce.created_at DESC`,
+        [appointmentId, adminId],
       );
       return attachPathologies(rows.map((r) => mapRow<ClinicalEvolution>(r)));
+    },
+
+    async existsAppointmentForAdmin(appointmentId: string, adminId: string): Promise<boolean> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        `SELECT 1 FROM appointments a
+         JOIN patient p ON p.id = a.patient_id
+         WHERE a.id = ? AND a.deleted_at IS NULL AND p.admin_id = ? LIMIT 1`,
+        [appointmentId, adminId],
+      );
+      return (rows as RowDataPacket[]).length > 0;
     },
 
     async create(data: Omit<ClinicalEvolution, "createdAt" | "updatedAt" | "deletedAt" | "evolutionPathologies">): Promise<ClinicalEvolution> {

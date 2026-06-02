@@ -6,20 +6,33 @@ import { nowSP } from "../../shared/utils/date";
 
 export function createAnamnesisRepository() {
   return {
-    async findById(id: string): Promise<Anamnesis | null> {
+    async findById(id: string, adminId: string): Promise<Anamnesis | null> {
       const [rows] = await pool.execute<RowDataPacket[]>(
-        "SELECT * FROM anamnesis WHERE id = ? AND deleted_at IS NULL LIMIT 1",
-        [id],
+        `SELECT a.* FROM anamnesis a
+         JOIN patient p ON p.id = a.patient_id
+         WHERE a.id = ? AND a.deleted_at IS NULL AND p.admin_id = ? LIMIT 1`,
+        [id, adminId],
       );
       return rows[0] ? mapRow<Anamnesis>(rows[0]) : null;
     },
 
-    async findByPatient(patientId: string): Promise<Anamnesis[]> {
+    async findByPatient(patientId: string, adminId: string): Promise<Anamnesis[]> {
       const [rows] = await pool.execute<RowDataPacket[]>(
-        "SELECT * FROM anamnesis WHERE patient_id = ? AND deleted_at IS NULL ORDER BY created_at DESC",
-        [patientId],
+        `SELECT a.* FROM anamnesis a
+         JOIN patient p ON p.id = a.patient_id
+         WHERE a.patient_id = ? AND a.deleted_at IS NULL AND p.admin_id = ?
+         ORDER BY a.created_at DESC`,
+        [patientId, adminId],
       );
       return rows.map((r) => mapRow<Anamnesis>(r));
+    },
+
+    async existsPatientForAdmin(patientId: string, adminId: string): Promise<boolean> {
+      const [rows] = await pool.execute<RowDataPacket[]>(
+        "SELECT id FROM patient WHERE id = ? AND admin_id = ? LIMIT 1",
+        [patientId, adminId],
+      );
+      return (rows as RowDataPacket[]).length > 0;
     },
 
     async create(data: Omit<Anamnesis, "createdAt" | "updatedAt" | "deletedAt"> & { deletedAt?: Date | null }): Promise<Anamnesis> {
@@ -70,10 +83,13 @@ export function createAnamnesisRepository() {
       return mapRow<Anamnesis>(rows[0]!);
     },
 
-    async softDelete(id: string): Promise<Anamnesis> {
+    async softDelete(id: string, adminId: string): Promise<Anamnesis> {
       await pool.execute(
-        "UPDATE anamnesis SET deleted_at = ? WHERE id = ?",
-        [nowSP(), id],
+        `UPDATE anamnesis a
+         JOIN patient p ON p.id = a.patient_id
+         SET a.deleted_at = ?
+         WHERE a.id = ? AND p.admin_id = ?`,
+        [nowSP(), id, adminId],
       );
       const [rows] = await pool.execute<RowDataPacket[]>(
         "SELECT * FROM anamnesis WHERE id = ? LIMIT 1",

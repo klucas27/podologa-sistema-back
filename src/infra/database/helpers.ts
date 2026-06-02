@@ -31,6 +31,12 @@ function normaliseValue(v: unknown): SqlValue {
   return v as SqlValue;
 }
 
+const SAFE_COL = /^[a-z0-9_]+$/;
+
+function assertSafeColumn(col: string): void {
+  if (!SAFE_COL.test(col)) throw new Error(`Coluna inválida: ${col}`);
+}
+
 // Constrói SET clause para UPDATE, convertendo chaves camelCase → snake_case
 export function buildSet(data: Record<string, unknown>): {
   clause: string;
@@ -38,7 +44,11 @@ export function buildSet(data: Record<string, unknown>): {
 } {
   const entries = Object.entries(data).filter(([, v]) => v !== undefined);
   return {
-    clause: entries.map(([k]) => `\`${toSnake(k)}\` = ?`).join(", "),
+    clause: entries.map(([k]) => {
+      const col = toSnake(k);
+      assertSafeColumn(col);
+      return `\`${col}\` = ?`;
+    }).join(", "),
     values: entries.map(([, v]) => normaliseValue(v)),
   };
 }
@@ -51,7 +61,11 @@ export function buildInsert(data: Record<string, unknown>): {
 } {
   const entries = Object.entries(data).filter(([, v]) => v !== undefined);
   return {
-    columns: entries.map(([k]) => `\`${toSnake(k)}\``).join(", "),
+    columns: entries.map(([k]) => {
+      const col = toSnake(k);
+      assertSafeColumn(col);
+      return `\`${col}\``;
+    }).join(", "),
     placeholders: entries.map(() => "?").join(", "),
     values: entries.map(([, v]) => normaliseValue(v)),
   };
